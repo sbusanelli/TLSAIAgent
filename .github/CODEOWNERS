@@ -1,0 +1,46 @@
+# CODEOWNERS file for TLS Agent project
+# This file defines code ownership and review requirements for the repository
+# See: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owners for all files in the repository
+* @sbusanelli
+
+# Go source code - require code owner review
+*.go @sbusanelli
+
+# Test files - require code owner review
+*_test.go @sbusanelli
+**/test/** @sbusanelli
+
+# Configuration files
+*.yaml @sbusanelli
+*.yml @sbusanelli
+coderabbit.yaml @sbusanelli
+.github/coderabbit.yaml @sbusanelli
+
+# Workflow files
+.github/workflows/ @sbusanelli
+
+# Build and deployment
+build.sh @sbusanelli
+Dockerfile @sbusanelli
+
+# Dependency management
+go.mod @sbusanelli
+go.sum @sbusanelli
+
+# Protocol buffers
+*.proto @sbusanelli
+**/*.pb.go @sbusanelli
+
+# Documentation
+README.md @sbusanelli
+*.md @sbusanelli
+.github/ @sbusanelli
+
+# TLS and Certificate related
+certs/ @sbusanelli
+internal/tlsstore/ @sbusanelli
+
+# Agent implementation
+internal/agent/ @sbusanelli
