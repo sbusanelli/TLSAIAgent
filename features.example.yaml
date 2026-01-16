@@ -1,0 +1,28 @@
+# Example Feature Configuration File (features.yaml)
+# This file demonstrates how to configure TLS Agent features
+
+# Boolean Feature Flags
+graceful_shutdown: true                 # Enable graceful shutdown on SIGTERM/SIGINT
+certificate_watcher: true               # Enable certificate file watching
+periodic_cert_check: true               # Enable periodic certificate expiry checks
+debounce_file_changes: true             # Enable debouncing of rapid file changes
+logging: true                            # Enable detailed logging
+metrics_collection: false                # Enable metrics collection (disabled by default)
+health_check: false                      # Enable health check endpoint (disabled by default)
+
+# Configuration Timeouts and Intervals (in seconds/milliseconds)
+shutdown_timeout: 10                     # Max seconds to wait for graceful shutdown
+agent_shutdown_timeout: 5                # Max seconds to wait for agent shutdown
+cert_watch_interval: 30                  # Seconds between periodic certificate checks
+debounce_interval: 2000                  # Milliseconds to debounce file change events
+cert_expiry_warning: 7                   # Days before certificate expiry to warn
+
+# Usage Examples:
+# 1. Load from this file:
+#    export FEATURES_CONFIG_PATH=/path/to/features.yaml
+#
+# 2. Override via environment variables:
+#    export TLS_AGENT_FEATURES_LOGGING=false
+#    export TLS_AGENT_FEATURES_SHUTDOWN_TIMEOUT=15
+#
+# 3. Environment variables take precedence over config file settings

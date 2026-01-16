@@ -1,0 +1,14 @@
+{
+  "graceful_shutdown": true,
+  "certificate_watcher": true,
+  "periodic_cert_check": true,
+  "debounce_file_changes": true,
+  "logging": true,
+  "metrics_collection": false,
+  "health_check": false,
+  "shutdown_timeout": 10,
+  "agent_shutdown_timeout": 5,
+  "cert_watch_interval": 30,
+  "debounce_interval": 2000,
+  "cert_expiry_warning": 7
+}
