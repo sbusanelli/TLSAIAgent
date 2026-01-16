@@ -38,8 +38,8 @@ func Run(store *tlsstore.Store, state *State) {
 
     log.Println("Agent: watching certs/server.crt and certs/server.key for changes")
 
-    // Also run periodic checks (fallback, every 60 seconds)
-    ticker := time.NewTicker(60 * time.Second)
+    // Also run periodic checks (fallback, every 30 seconds)
+    ticker := time.NewTicker(30 * time.Second)
     defer ticker.Stop()
 
     // Track recent reloads to avoid duplicate processing
