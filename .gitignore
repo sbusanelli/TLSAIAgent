@@ -1,0 +1,78 @@
+# TLS certificates (sensitive)
+certs/server.key
+certs/server.crt
+
+# Binaries and executables
+*.exe
+*.exe~
+*.dll
+*.so
+*.so.*
+*.dylib
+bin/
+dist/
+build/
+out/
+
+# Go build cache
+.cache/
+*.o
+*.a
+*.test
+
+# Dependency directories
+vendor/
+go.work.sum
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.iml
+*.iws
+*.ipr
+
+# Build outputs
+*.out
+tls-agent
+
+# Test and coverage
+*.cover
+coverage.txt
+*.prof
+*.pprof
+
+# TLS certificates (sensitive)
+certs/server.key
+certs/server.crt
+certs/*.pem
+
+# Environment and secrets
+.env
+.env.local
+.env.*.local
+secrets/
+*.key
+*.crt
+
+# OS files
+.DS_Store
+Thumbs.db
+.AppleDouble
+.LSOverride
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.log
+
+# Git
+.git/
+
+# Scripts (optional, keep if needed)
+# analyze_cleanup.sh
+# prune_tlsaiagent.sh
