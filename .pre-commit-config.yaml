@@ -1,0 +1,158 @@
+# Pre-commit hooks configuration
+# Install: pre-commit install
+# Run manually: pre-commit run --all-files
+# Update: pre-commit autoupdate
+
+repos:
+  # Go linting with golangci-lint
+  - repo: https://github.com/golangci/golangci-lint
+    rev: v1.55.2
+    hooks:
+      - id: golangci-lint
+        name: golangci-lint
+        description: Run golangci-lint linter
+        entry: golangci-lint run --fix
+        language: golang
+        types: [go]
+        pass_filenames: false
+        stages: [commit]
+
+  # Go fmt - Format Go code
+  - repo: https://github.com/golang/tools
+    rev: v0.16.1
+    hooks:
+      - id: go-fmt
+        name: go fmt
+        description: Format Go code
+        entry: gofmt -w
+        language: golang
+        types: [go]
+        stages: [commit]
+
+  # Go vet - Analyze Go code
+  - repo: https://github.com/golang/tools
+    rev: v0.16.1
+    hooks:
+      - id: go-vet
+        name: go vet
+        description: Run go vet
+        entry: go vet ./...
+        language: golang
+        types: [go]
+        pass_filenames: false
+        stages: [commit]
+
+  # General pre-commit hooks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      # Identify files that would conflict in merge
+      - id: check-merge-conflict
+        name: Check for merge conflicts
+        description: Check for files that would conflict in a merge
+        stages: [commit]
+
+      # Check for files that would parse as invalid YAML
+      - id: check-yaml
+        name: Check YAML
+        description: Check YAML files for syntax errors
+        types: [yaml]
+        stages: [commit]
+
+      # Check for files that would parse as invalid JSON
+      - id: check-json
+        name: Check JSON
+        description: Check JSON files for syntax errors
+        types: [json]
+        stages: [commit]
+
+      # Check for large files
+      - id: check-added-large-files
+        name: Check for large files
+        description: Prevent giant files from being committed
+        args: ['--maxkb=500']
+        stages: [commit]
+
+      # Trim trailing whitespace
+      - id: trailing-whitespace
+        name: Trim trailing whitespace
+        description: Fix trailing whitespace issues
+        types: [text]
+        stages: [commit]
+
+      # End file fixer - Ensure files end with a newline
+      - id: end-of-file-fixer
+        name: Fix end of file
+        description: Ensure files end with a single newline
+        types: [text]
+        stages: [commit]
+
+  # Detect secrets
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.4.0
+    hooks:
+      - id: detect-secrets
+        name: Detect secrets
+        description: Detect secrets in code
+        args: ['--baseline', '.secrets.baseline', '--force-use-all-plugins']
+        stages: [commit]
+
+  # Security checks for Go
+  - repo: https://github.com/securego/gosec
+    rev: v2.18.2
+    hooks:
+      - id: gosec
+        name: gosec
+        description: Run Go security checker
+        entry: gosec ./...
+        language: golang
+        types: [go]
+        pass_filenames: false
+        stages: [commit]
+
+# Optional: Local custom hooks
+  - repo: local
+    hooks:
+      # Go build check
+      - id: go-build
+        name: Go build
+        description: Verify Go code compiles
+        entry: bash -c 'go build -v ./...'
+        language: system
+        types: [go]
+        pass_filenames: false
+        stages: [commit]
+
+      # Go test
+      - id: go-test
+        name: Go test
+        description: Run Go tests
+        entry: bash -c 'go test -race -v ./... -timeout=10s'
+        language: system
+        types: [go]
+        pass_filenames: false
+        stages: [commit]
+
+      # Go mod tidy
+      - id: go-mod-tidy
+        name: Go mod tidy
+        description: Check if go.mod is tidy
+        entry: bash -c 'go mod tidy && git diff --exit-code go.mod go.sum'
+        language: system
+        files: go.mod
+        stages: [commit]
+
+# File patterns to exclude from pre-commit checks
+exclude: |
+  (?x)^(
+    vendor/|
+    .git/|
+    bin/
+  )
+
+# CI only - Disable in local development to speed up commits
+ci:
+  autofix_commit_msg: 'style: auto fixes from pre-commit.com hooks'
+  autofix_stage: manual
+  skip: [gosec]  # Skip gosec in CI to speed up checks
+  stages: [commit]
