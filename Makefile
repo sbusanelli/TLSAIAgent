@@ -10,6 +10,15 @@ help:
 	@echo "  make build              Build the TLS Agent binary"
 	@echo "  make test               Run all tests"
 	@echo "  make test-race          Run tests with race detector"
+	@echo "  make test-coverage      Run tests with coverage report"
+	@echo "  make test-unit          Run unit tests only"
+	@echo "  make test-integration   Run integration tests only"
+	@echo "  make test-benchmark     Run benchmark tests"
+	@echo "  make test-performance   Run performance tests"
+	@echo "  make test-verbose       Run tests with verbose output"
+	@echo "  make test-short         Run short tests only"
+	@echo "  make test-all           Run all test suites"
+	@echo "  make test-ci            Run CI test suite"
 	@echo ""
 	@echo "Code Quality:"
 	@echo "  make lint               Run golangci-lint"
@@ -48,6 +57,48 @@ test-coverage:
 	@go test -v -race -coverprofile=coverage.out ./...
 	@go tool cover -html=coverage.out -o coverage.html
 	@echo "✅ Coverage report generated: coverage.html"
+
+test-unit:
+	@echo "🧪 Running unit tests..."
+	@go test -v -race -run "^Test" ./...
+	@echo "✅ Unit tests passed"
+
+test-integration:
+	@echo "🔗 Running integration tests..."
+	@go test -v -race -run "^TestIntegration" ./...
+	@echo "✅ Integration tests passed"
+
+test-benchmark:
+	@echo "⚡ Running benchmark tests..."
+	@go test -v -bench=. -benchmem ./...
+	@echo "✅ Benchmark tests completed"
+
+test-performance:
+	@echo "🚀 Running performance tests..."
+	@go test -v -race -run "^Benchmark" -bench=. -benchmem ./...
+	@echo "✅ Performance tests completed"
+
+test-verbose:
+	@echo "🧪 Running tests with verbose output..."
+	@go test -v -race -coverprofile=coverage.out ./...
+	@go tool cover -func=coverage.out
+	@go tool cover -html=coverage.out -o coverage.html
+	@echo "✅ Verbose tests completed"
+
+test-short:
+	@echo "🧪 Running short tests..."
+	@go test -v -short ./...
+	@echo "✅ Short tests passed"
+
+test-all: test-unit test-integration test-benchmark test-coverage
+	@echo "✅ All test suites completed"
+
+test-ci:
+	@echo "🧪 Running CI test suite..."
+	@go test -v -race -coverprofile=coverage.out ./...
+	@go tool cover -func=coverage.out
+	@go tool cover -html=coverage.out -o coverage.html
+	@echo "✅ CI tests completed"
 
 # Code quality targets
 lint:
@@ -132,4 +183,4 @@ dev-setup: install-hooks fmt lint test
 	@echo "✅ Development environment setup complete"
 
 # Phony targets that don't create files
-.PHONY: help build test test-race test-coverage lint lint-fix fmt fmt-check vet security install-hooks run-hooks run-hooks-all run-hooks-verbose update-hooks clean-hooks uninstall-hooks run clean check dev-setup
+.PHONY: help build test test-race test-coverage test-unit test-integration test-benchmark test-performance test-verbose test-short test-all test-ci lint lint-fix fmt fmt-check vet security install-hooks run-hooks run-hooks-all run-hooks-verbose update-hooks clean-hooks uninstall-hooks run clean check dev-setup
