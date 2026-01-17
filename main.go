@@ -112,8 +112,10 @@ func main() {
 	}
 
 	if featureConfig.Logging {
-		log.Println("TLS Agent server running on :8443")
-		log.Println("Press Ctrl+C to gracefully shutdown")
+		log.Println(" ")
+		log.Println("🎨 TLS Agent server running on https://localhost:8443")
+		log.Println("   Press Ctrl+C to gracefully shutdown")
+		log.Println(" ")
 	}
 
 	if err := server.ListenAndServeTLS("", ""); err != nil && err != http.ErrServerClosed {
