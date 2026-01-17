@@ -15,8 +15,6 @@
 # Configuration files
 *.yaml @sbusanelli
 *.yml @sbusanelli
-coderabbit.yaml @sbusanelli
-.github/coderabbit.yaml @sbusanelli
 
 # Workflow files
 .github/workflows/ @sbusanelli
