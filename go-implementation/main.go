@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	app := cli.NewApp(&cli.App{
+	app := &cli.App{
 		Name:  "virtual-threads-benchmark",
 		Usage: "Performance comparison between Go Goroutines and Java Virtual Threads",
 		Flags: []cli.Flag{
@@ -30,15 +30,16 @@ func main() {
 			},
 		},
 		Action: func(c *cli.Context) error {
-			taskCounts := []int{1000, 5000, 10000, 50000, 100000}
-			
-			if c.Int("tasks") > 0 {
+			taskCounts := []int{1000, 5000, 10000} // Default tasks for comparison
+
+			// If the user specifies a task count, override the default list
+			if c.IsSet("tasks") {
 				taskCounts = []int{c.Int("tasks")}
 			}
 
 			fmt.Println("🚀 Virtual Threads vs Goroutines Benchmark")
 			fmt.Println("=====================================")
-			fmt.Printf("Configuration: %d tasks max, %s duration per task\n\n", 
+			fmt.Printf("Configuration: %d tasks max, %s duration per task\n\n",
 				c.Int("tasks"), c.String("duration"))
 
 			// Run Go goroutine benchmarks
@@ -51,7 +52,7 @@ func main() {
 
 			return nil
 		},
-	})
+	}
 
 	if err := app.Run(os.Args); err != nil {
 		log.Fatal(err)

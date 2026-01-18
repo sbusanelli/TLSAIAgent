@@ -5,8 +5,6 @@ import (
 	"runtime"
 	"sync"
 	"time"
-	"os"
-	"strconv"
 )
 
 type BenchmarkResult struct {
@@ -73,45 +71,70 @@ func runGoroutineBenchmark(taskCount int) BenchmarkResult {
 }
 
 func printResults(results []BenchmarkResult) {
-	fmt.Println("\n=== GOROUTINE BENCHMARK RESULTS ===")
-	fmt.Printf("%-20s %-10s %-15s %-15s\n", "Implementation", "Tasks", "Time", "Throughput")
-	fmt.Println("-".repeat(60))
+	fmt.Println("\n📊 Go Goroutine Benchmark Results")
+	fmt.Println("-----------------------------------------------------------------------------")
+	fmt.Printf("%-15s | %-10s | %-15s | %-15s | %-15s\n", "Implementation", "Tasks", "Time", "Memory (MB)", "Throughput (t/s)")
+	fmt.Println("-----------------------------------------------------------------------------")
 
 	for _, result := range results {
-		fmt.Printf("%-20s %-10d %-15v %-15.2f\n", 
-			result.Implementation, result.TaskCount, result.ExecutionTime, result.Throughput)
+		throughputStr := fmt.Sprintf("%.2f", result.Throughput)
+		fmt.Printf("%-15s | %-10d | %-15v | %-15d | %-15s\n",
+			result.Implementation, result.TaskCount, result.ExecutionTime, result.MemoryUsed, throughputStr)
 	}
-	fmt.Println()
+	fmt.Println("-----------------------------------------------------------------------------")
+}
+
+func printScalabilityAnalysis(results []BenchmarkResult) {
+	fmt.Println("\n📈 Goroutine Scalability Analysis")
+	fmt.Println("----------------------------------------------------------------")
+	fmt.Printf("%-20s | %-20s | %-20s\n", "Task Increase", "Execution Time Increase", "Tasks-to-Time Ratio")
+	fmt.Println("----------------------------------------------------------------")
+
+	for i, result := range results {
+		if i > 0 {
+			prevResult := results[i-1]
+
+			if prevResult.TaskCount == 0 || prevResult.ExecutionTime.Seconds() == 0 {
+				continue
+			}
+
+			taskIncrease := float64(result.TaskCount) / float64(prevResult.TaskCount)
+			timeIncrease := result.ExecutionTime.Seconds() / prevResult.ExecutionTime.Seconds()
+
+			ratio := 0.0
+			if timeIncrease > 0 {
+				ratio = taskIncrease / timeIncrease
+			}
+
+			taskIncreaseStr := fmt.Sprintf("%.2fx", taskIncrease)
+			timeIncreaseStr := fmt.Sprintf("%.2fx", timeIncrease)
+			ratioStr := fmt.Sprintf("%.2f", ratio)
+
+			fmt.Printf("%-20s | %-20s | %-20s\n", taskIncreaseStr, timeIncreaseStr, ratioStr)
+		}
+	}
+	fmt.Println("----------------------------------------------------------------")
+	fmt.Println("* A Tasks-to-Time Ratio > 1.0 indicates good scalability.")
 }
 
 func runGoroutineComparison(taskCounts []int) {
-	fmt.Println("=== Go Goroutines Performance Test ===")
-	fmt.Println("Testing Goroutines performance with I/O-bound tasks\n")
-
+	fmt.Println("🏃 Running Go Goroutine benchmarks...")
 	var results []BenchmarkResult
 
 	for _, taskCount := range taskCounts {
-		fmt.Printf("Running %d tasks with Goroutines...\n", taskCount)
+		// Simple progress indicator
+		fmt.Printf("  • Running test with %d tasks...", taskCount)
 		result := runGoroutineBenchmark(taskCount)
 		results = append(results, result)
-		fmt.Println(result)
-		fmt.Println()
+		fmt.Println(" Done.")
 
 		// Brief pause between tests
-		time.Sleep(500 * time.Millisecond)
+		time.Sleep(250 * time.Millisecond)
 	}
 
 	printResults(results)
 
-	fmt.Println("=== Goroutine Scalability Analysis ===")
-	for i, result := range results {
-		if i > 0 {
-			prevResult := results[i-1]
-			scalability := float64(result.TaskCount) / float64(prevResult.TaskCount)
-			timeIncrease := result.ExecutionTime.Seconds() / prevResult.ExecutionTime.Seconds()
-			
-			fmt.Printf("Task count increased %.1fx, execution time increased %.2fx\n", 
-				scalability, timeIncrease)
-		}
+	if len(results) > 1 {
+		printScalabilityAnalysis(results)
 	}
 }
