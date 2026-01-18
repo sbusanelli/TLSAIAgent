@@ -1,0 +1,427 @@
+name: Enterprise Security Scan
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Run security scan daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+env:
+  GO_VERSION: '1.22'
+
+jobs:
+  # Static Application Security Testing (SAST)
+  sast:
+    name: Static Application Security Testing
+    runs-on: ubuntu-latest
+    outputs:
+      sast-passed: ${{ steps.sast.outputs.passed }}
+      vulnerabilities-found: ${{ steps.sast.outputs.vulnerabilities }}
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Setup Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        cache: true
+
+    - name: Run Gosec Security Scanner
+      id: sast
+      run: |
+        echo "::group::Running Gosec Security Scanner"
+        
+        # Install gosec
+        go install github.com/securecodewarrior/gosec/v2/cmd/gosec@latest
+        
+        # Run security scan
+        gosec -fmt=json -out=gosec-report.json ./... || true
+        gosec -fmt=sonarqube -out=gosec-sonar.xml ./... || true
+        gosec ./...
+        
+        # Count vulnerabilities
+        if [ -f gosec-report.json ]; then
+          vulnerabilities=$(jq '.Issues | length' gosec-report.json 2>/dev/null || echo "0")
+        else
+          vulnerabilities="0"
+        fi
+        
+        echo "vulnerabilities=$vulnerabilities" >> $GITHUB_OUTPUT
+        
+        # Check for critical vulnerabilities
+        critical_vulns=$(jq '.Issues | map(select(.severity == "HIGH")) | length' gosec-report.json 2>/dev/null || echo "0")
+        
+        if [ "$critical_vulns" -gt 0 ]; then
+          echo "❌ Critical vulnerabilities found: $critical_vulns"
+          echo "passed=false" >> $GITHUB_OUTPUT
+        else
+          echo "✅ No critical vulnerabilities found"
+          echo "passed=true" >> $GITHUB_OUTPUT
+        fi
+        
+        echo "::endgroup::"
+
+    - name: Upload Gosec Reports
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: gosec-reports
+        path: |
+          gosec-report.json
+          gosec-sonar.xml
+
+    - name: Run Semgrep Security Scan
+      run: |
+        echo "::group::Running Semgrep Security Scan"
+        
+        # Install semgrep
+        pip install semgrep
+        
+        # Run security scan
+        semgrep --config=auto --json --output=semgrep-report.json ./ || true
+        semgrep --config=auto ./ || true
+        
+        echo "::endgroup::"
+
+    - name: Upload Semgrep Reports
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: semgrep-reports
+        path: semgrep-report.json
+
+  # Dependency Security Scanning
+  dependency-scan:
+    name: Dependency Security Scanning
+    runs-on: ubuntu-latest
+    outputs:
+      deps-passed: ${{ steps.deps.outputs.passed }}
+      vulnerabilities-found: ${{ steps.deps.outputs.vulnerabilities }}
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        cache: true
+
+    - name: Run Go Vulnerability Database Check
+      id: deps
+      run: |
+        echo "::group::Running Go Vulnerability Database Check"
+        
+        # Install govulncheck
+        go install golang.org/x/vuln/cmd/govulncheck@latest
+        
+        # Run vulnerability check
+        govulncheck ./... > vulncheck-report.txt 2>&1 || true
+        govulncheck -json ./... > vulncheck-report.json 2>&1 || true
+        
+        # Count vulnerabilities
+        if [ -f vulncheck-report.json ]; then
+          vulnerabilities=$(jq '. | length' vulncheck-report.json 2>/dev/null || echo "0")
+        else
+          vulnerabilities="0"
+        fi
+        
+        echo "vulnerabilities=$vulnerabilities" >> $GITHUB_OUTPUT
+        
+        # Check for critical vulnerabilities
+        critical_vulns=$(jq '. | map(select(.severity == "HIGH")) | length' vulncheck-report.json 2>/dev/null || echo "0")
+        
+        if [ "$critical_vulns" -gt 0 ]; then
+          echo "❌ Critical dependency vulnerabilities found: $critical_vulns"
+          echo "passed=false" >> $GITHUB_OUTPUT
+        else
+          echo "✅ No critical dependency vulnerabilities found"
+          echo "passed=true" >> $GITHUB_OUTPUT
+        fi
+        
+        echo "::endgroup::"
+
+    - name: Upload Vulnerability Reports
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: vulnerability-reports
+        path: |
+          vulncheck-report.txt
+          vulncheck-report.json
+
+    - name: Run Snyk Security Scan
+      if: secrets.SNYK_TOKEN != ''
+      run: |
+        echo "::group::Running Snyk Security Scan"
+        
+        # Install Snyk
+        npm install -g snyk
+        
+        # Run Snyk scan
+        snyk test --json > snyk-report.json || true
+        snyk test || true
+        
+        echo "::endgroup::"
+
+    - name: Upload Snyk Reports
+      uses: actions/upload-artifact@v3
+      if: always() && secrets.SNYK_TOKEN != ''
+      with:
+        name: snyk-reports
+        path: snyk-report.json
+
+  # Container Security Scanning
+  container-scan:
+    name: Container Security Scanning
+    runs-on: ubuntu-latest
+    needs: [sast, dependency-scan]
+    if: needs.sast.outputs.sast-passed == 'true' && needs.deps.outputs.deps-passed == 'true'
+    outputs:
+      container-passed: ${{ steps.container.outputs.passed }}
+      vulnerabilities-found: ${{ steps.container.outputs.vulnerabilities }}
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build Container Image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: false
+        load: true
+        tags: tlsai-agent:security-scan
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+    - name: Run Trivy Security Scan
+      id: container
+      run: |
+        echo "::group::Running Trivy Security Scan"
+        
+        # Install Trivy
+        sudo apt-get update
+        sudo apt-get install wget apt-transport-https gnupg lsb-release
+        wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
+        echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee -a /etc/apt/sources.list.d/trivy.list
+        sudo apt-get update
+        sudo apt-get install trivy
+        
+        # Run container scan
+        trivy image --format json --output trivy-report.json tlsai-agent:security-scan || true
+        trivy image tlsai-agent:security-scan || true
+        
+        # Count vulnerabilities
+        if [ -f trivy-report.json ]; then
+          vulnerabilities=$(jq '.Results[]?.Vulnerabilities | length' trivy-report.json 2>/dev/null || echo "0")
+        else
+          vulnerabilities="0"
+        fi
+        
+        echo "vulnerabilities=$vulnerabilities" >> $GITHUB_OUTPUT
+        
+        # Check for critical vulnerabilities
+        critical_vulns=$(jq '.Results[]?.Vulnerabilities | map(select(.Severity == "CRITICAL" or .Severity == "HIGH")) | length' trivy-report.json 2>/dev/null || echo "0")
+        
+        if [ "$critical_vulns" -gt 0 ]; then
+          echo "❌ Critical container vulnerabilities found: $critical_vulns"
+          echo "passed=false" >> $GITHUB_OUTPUT
+        else
+          echo "✅ No critical container vulnerabilities found"
+          echo "passed=true" >> $GITHUB_OUTPUT
+        fi
+        
+        echo "::endgroup::"
+
+    - name: Upload Trivy Reports
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: trivy-reports
+        path: trivy-report.json
+
+    - name: Run Grype Security Scan
+      run: |
+        echo "::group::Running Grype Security Scan"
+        
+        # Install Grype
+        curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b /usr/local/bin
+        
+        # Run container scan
+        grype tlsai-agent:security-scan --output json > grype-report.json || true
+        grype tlsai-agent:security-scan || true
+        
+        echo "::endgroup::"
+
+    - name: Upload Grype Reports
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: grype-reports
+        path: grype-report.json
+
+  # Infrastructure as Code Security
+  iac-security:
+    name: Infrastructure as Code Security
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Run Checkov Security Scan
+      run: |
+        echo "::group::Running Checkov Security Scan"
+        
+        # Install Checkov
+        pip install checkov
+        
+        # Run IaC security scan
+        checkov --directory . --output json --output-file-path checkov-report.json || true
+        checkov --directory . || true
+        
+        echo "::endgroup::"
+
+    - name: Upload Checkov Reports
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: checkov-reports
+        path: checkov-report.json
+
+  # Secrets Scanning
+  secrets-scan:
+    name: Secrets Scanning
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Run Gitleaks Security Scan
+      run: |
+        echo "::group::Running Gitleaks Security Scan"
+        
+        # Install Gitleaks
+        wget https://github.com/gitleaks/gitleaks/releases/latest/download/gitleaks-linux-amd64
+        chmod +x gitleaks-linux-amd64
+        sudo mv gitleaks-linux-amd64 /usr/local/bin/gitleaks
+        
+        # Run secrets scan
+        gitleaks detect --source . --report-path gitleaks-report.json --report-format json || true
+        gitleaks detect --source . || true
+        
+        echo "::endgroup::"
+
+    - name: Upload Gitleaks Reports
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: gitleaks-reports
+        path: gitleaks-report.json
+
+    - name: Run TruffleHog Security Scan
+      run: |
+        echo "::group::Running TruffleHog Security Scan"
+        
+        # Install TruffleHog
+        pip install trufflehog
+        
+        # Run secrets scan
+        trufflehog filesystem . --json --output trufflehog-report.json || true
+        trufflehog filesystem . || true
+        
+        echo "::endgroup::"
+
+    - name: Upload TruffleHog Reports
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: trufflehog-reports
+        path: trufflehog-report.json
+
+  # Security Summary
+  security-summary:
+    name: Security Summary
+    runs-on: ubuntu-latest
+    needs: [sast, dependency-scan, container-scan]
+    if: always()
+    steps:
+    - name: Generate Security Summary
+      run: |
+        echo "::group::Security Scan Summary"
+        echo "# 🔒 Security Scan Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "| Scan Type | Status | Vulnerabilities |" >> $GITHUB_STEP_SUMMARY
+        echo "|-----------|--------|----------------|" >> $GITHUB_STEP_SUMMARY
+        
+        # SAST Summary
+        sast_status="${{ needs.sast.outputs.sast-passed == 'true' && '✅ Passed' || '❌ Failed' }}"
+        sast_vulns="${{ needs.sast.outputs.vulnerabilities }}"
+        echo "| SAST | $sast_status | $sast_vulns |" >> $GITHUB_STEP_SUMMARY
+        
+        # Dependency Summary
+        deps_status="${{ needs.dependency-scan.outputs.deps-passed == 'true' && '✅ Passed' || '❌ Failed' }}"
+        deps_vulns="${{ needs.dependency-scan.outputs.vulnerabilities }}"
+        echo "| Dependencies | $deps_status | $deps_vulns |" >> $GITHUB_STEP_SUMMARY
+        
+        # Container Summary
+        container_status="${{ needs.container-scan.outputs.container-passed == 'true' && '✅ Passed' || '❌ Failed' }}"
+        container_vulns="${{ needs.container-scan.outputs.vulnerabilities }}"
+        echo "| Container | $container_status | $container_vulns |" >> $GITHUB_STEP_SUMMARY
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "## 📊 Security Metrics" >> $GITHUB_STEP_SUMMARY
+        echo "- Total Vulnerabilities Found: $((sast_vulns + deps_vulns + container_vulns))" >> $GITHUB_STEP_SUMMARY
+        echo "- Security Gates: $((sast_status == '✅ Passed' && deps_status == '✅ Passed' && container_status == '✅ Passed' && echo '3/3 Passed' || echo 'Some Failed'))" >> $GITHUB_STEP_SUMMARY
+        echo "- Scan Duration: ${{ github.run_number }} runs" >> $GITHUB_STEP_SUMMARY
+        
+        echo "::endgroup::"
+
+    - name: Security Gate Check
+      run: |
+        if [[ "${{ needs.sast.outputs.sast-passed }}" == "true" && 
+              "${{ needs.dependency-scan.outputs.deps-passed }}" == "true" && 
+              "${{ needs.container-scan.outputs.container-passed }}" == "true" ]]; then
+          echo "✅ All security gates passed"
+        else
+          echo "❌ Security gates failed - blocking deployment"
+          exit 1
+        fi
+
+  # Notification
+  notify:
+    name: Security Notification
+    runs-on: ubuntu-latest
+    needs: [sast, dependency-scan, container-scan]
+    if: always()
+    steps:
+    - name: Security Scan Notification
+      run: |
+        echo "::group::Security Scan Notification"
+        
+        if [[ "${{ needs.sast.outputs.sast-passed }}" == "true" && 
+              "${{ needs.dependency-scan.outputs.deps-passed }}" == "true" && 
+              "${{ needs.container-scan.outputs.container-passed }}" == "true" ]]; then
+          echo "🔒 Security scan completed successfully!"
+          echo "Repository: ${{ github.repository }}"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Commit: ${{ github.sha }}"
+        else
+          echo "🚨 Security scan failed!"
+          echo "Repository: ${{ github.repository }}"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Commit: ${{ github.sha }}"
+        fi
+        
+        echo "::endgroup::"

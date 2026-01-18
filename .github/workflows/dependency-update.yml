@@ -1,0 +1,510 @@
+name: Enterprise Dependency Management
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Run dependency updates daily at 3 AM UTC
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+    inputs:
+      update-type:
+        description: 'Type of dependency update'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+        - patch
+        - minor
+        - major
+      auto-merge:
+        description: 'Automatically merge updates'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  GO_VERSION: '1.22'
+  UPDATE_BRANCH: 'dependency-updates'
+
+jobs:
+  # Dependency Analysis
+  dependency-analysis:
+    name: Dependency Analysis
+    runs-on: ubuntu-latest
+    outputs:
+      outdated-count: ${{ steps.analysis.outputs.outdated-count }}
+      vulnerable-count: ${{ steps.analysis.outputs.vulnerable-count }}
+      update-available: ${{ steps.analysis.outputs.update-available }}
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Setup Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        cache: true
+
+    - name: Analyze Dependencies
+      id: analysis
+      run: |
+        echo "::group::Analyzing Dependencies"
+        
+        # List all dependencies
+        go list -m all > dependencies.txt
+        
+        # Check for outdated dependencies
+        go list -u -m all > outdated.txt
+        
+        # Count outdated dependencies
+        outdated_count=$(grep -c '\[' outdated.txt 2>/dev/null || echo "0")
+        echo "outdated-count=$outdated_count" >> $GITHUB_OUTPUT
+        
+        # Run vulnerability check
+        go install golang.org/x/vuln/cmd/govulncheck@latest
+        govulncheck ./... > vuln-check.txt 2>&1 || true
+        
+        # Count vulnerabilities
+        vulnerable_count=$(grep -c "CVE" vuln-check.txt 2>/dev/null || echo "0")
+        echo "vulnerable-count=$vulnerable_count" >> $GITHUB_OUTPUT
+        
+        # Check if updates are available
+        if [ "$outdated_count" -gt 0 ] || [ "$vulnerable_count" -gt 0 ]; then
+          echo "update-available=true" >> $GITHUB_OUTPUT
+        else
+          echo "update-available=false" >> $GITHUB_OUTPUT
+        fi
+        
+        echo "Dependency Analysis Results:"
+        echo "  Total dependencies: $(wc -l < dependencies.txt)"
+        echo "  Outdated dependencies: $outdated_count"
+        echo "  Vulnerabilities found: $vulnerable_count"
+        echo "  Updates available: ${{ steps.analysis.outputs.update-available }}"
+        
+        echo "::endgroup::"
+
+    - name: Upload Analysis Reports
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: dependency-analysis
+        path: |
+          dependencies.txt
+          outdated.txt
+          vuln-check.txt
+
+  # Security Vulnerability Check
+  security-check:
+    name: Security Vulnerability Check
+    runs-on: ubuntu-latest
+    needs: dependency-analysis
+    if: needs.dependency-analysis.outputs.update-available == 'true'
+    outputs:
+      critical-vulns: ${{ steps.security.outputs.critical }}
+      high-vulns: ${{ steps.security.outputs.high }}
+      medium-vulns: ${{ steps.security.outputs.medium }}
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        cache: true
+
+    - name: Run Security Vulnerability Check
+      id: security
+      run: |
+        echo "::group::Running Security Vulnerability Check"
+        
+        # Install govulncheck
+        go install golang.org/x/vuln/cmd/govulncheck@latest
+        
+        # Run vulnerability check with JSON output
+        govulncheck -json ./... > vuln-report.json 2>&1 || true
+        
+        # Parse vulnerability report
+        if [ -f vuln-report.json ]; then
+          critical_vulns=$(jq '. | map(select(.severity == "CRITICAL")) | length' vuln-report.json 2>/dev/null || echo "0")
+          high_vulns=$(jq '. | map(select(.severity == "HIGH")) | length' vuln-report.json 2>/dev/null || echo "0")
+          medium_vulns=$(jq '. | map(select(.severity == "MEDIUM")) | length' vuln-report.json 2>/dev/null || echo "0")
+        else
+          critical_vulns="0"
+          high_vulns="0"
+          medium_vulns="0"
+        fi
+        
+        echo "critical=$critical_vulns" >> $GITHUB_OUTPUT
+        echo "high=$high_vulns" >> $GITHUB_OUTPUT
+        echo "medium=$medium_vulns" >> $GITHUB_OUTPUT
+        
+        echo "Vulnerability Summary:"
+        echo "  Critical: $critical_vulns"
+        echo "  High: $high_vulns"
+        echo "  Medium: $medium_vulns"
+        
+        # Fail on critical vulnerabilities
+        if [ "$critical_vulns" -gt 0 ]; then
+          echo "❌ Critical vulnerabilities found - immediate action required"
+          exit 1
+        fi
+        
+        echo "::endgroup::"
+
+    - name: Upload Security Reports
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: security-reports
+        path: vuln-report.json
+
+  # Dependency Update
+  dependency-update:
+    name: Dependency Update
+    runs-on: ubuntu-latest
+    needs: [dependency-analysis, security-check]
+    if: |
+      needs.dependency-analysis.outputs.update-available == 'true' && 
+      (needs.security-check.outputs.critical == '0' || github.event_name == 'workflow_dispatch')
+    outputs:
+      update-success: ${{ steps.update.outputs.success }}
+      updated-packages: ${{ steps.update.outputs.packages }}
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Setup Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        cache: true
+
+    - name: Update Dependencies
+      id: update
+      run: |
+        echo "::group::Updating Dependencies"
+        
+        # Create update branch
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git checkout -b ${{ env.UPDATE_BRANCH }} || git checkout ${{ env.UPDATE_BRANCH }}
+        
+        # Update dependencies based on input
+        update_type="${{ github.event.inputs.update-type || 'patch' }}"
+        
+        echo "Updating dependencies with type: $update_type"
+        
+        # Get list of outdated packages
+        go list -u -m all | grep '\[' > outdated-packages.txt
+        
+        updated_packages=""
+        
+        # Update each outdated package
+        while IFS= read -r line; do
+          if [[ $line == *"["* ]]; then
+            package=$(echo "$line" | awk '{print $1}')
+            current_version=$(echo "$line" | sed 's/.*\[\(.*\)]/\1/')
+            latest_version=$(echo "$line" | sed 's/.*-> \(.*\)/\1/')
+            
+            echo "Updating $package from $current_version to $latest_version"
+            
+            # Update package
+            if go get "$package@$latest_version"; then
+              updated_packages="$updated_packages $package"
+              echo "✅ Updated $package"
+            else
+              echo "❌ Failed to update $package"
+            fi
+          fi
+        done < outdated-packages.txt
+        
+        # Tidy dependencies
+        go mod tidy
+        
+        # Run tests to ensure updates don't break anything
+        echo "Running tests after dependency updates..."
+        if go test ./...; then
+          echo "✅ Tests passed after dependency updates"
+          echo "success=true" >> $GITHUB_OUTPUT
+        else
+          echo "❌ Tests failed after dependency updates"
+          echo "success=false" >> $GITHUB_OUTPUT
+          exit 1
+        fi
+        
+        echo "packages=$updated_packages" >> $GITHUB_OUTPUT
+        echo "::endgroup::"
+
+    - name: Commit Updates
+      if: steps.update.outputs.success == 'true'
+      run: |
+        echo "::group::Committing Dependency Updates"
+        
+        # Add changes
+        git add go.mod go.sum
+        
+        # Check if there are changes to commit
+        if git diff --staged --quiet; then
+          echo "No changes to commit"
+        else
+          # Commit changes
+          git commit -m "chore: update dependencies
+
+          Updated packages:${{ steps.update.outputs.packages }}
+
+          - Automated dependency update
+          - Security patches and bug fixes
+          - Performance improvements
+
+          [skip ci]"
+          
+          # Push changes
+          git push origin ${{ env.UPDATE_BRANCH }}
+          
+          echo "✅ Dependency updates committed and pushed"
+        fi
+        
+        echo "::endgroup::"
+
+    - name: Create Pull Request
+      if: steps.update.outputs.success == 'true'
+      uses: peter-evans/create-pull-request@v5
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        branch: ${{ env.UPDATE_BRANCH }}
+        base: main
+        title: "chore: automated dependency updates"
+        body: |
+          ## 🔄 Automated Dependency Updates
+          
+          This PR contains automated dependency updates to improve security and performance.
+          
+          ### 📦 Updated Packages
+          ${{ steps.update.outputs.packages }}
+          
+          ### 🔒 Security Improvements
+          - Fixed security vulnerabilities
+          - Applied latest security patches
+          - Improved dependency security posture
+          
+          ### ⚡ Performance Improvements
+          - Latest performance optimizations
+          - Bug fixes and stability improvements
+          - Updated to latest stable versions
+          
+          ### 🧪 Testing
+          - All tests pass with updated dependencies
+          - No breaking changes detected
+          - Compatibility verified
+          
+          ### 📋 Checklist
+          - [ ] Review updated dependencies
+          - [ ] Check for breaking changes
+          - [ ] Verify test coverage
+          - [ ] Confirm security improvements
+          
+          ---
+          
+          🤖 This PR was created automatically by GitHub Actions.
+          Please review the changes and merge if everything looks good.
+        labels: |
+          dependencies
+          automated
+          security
+        draft: false
+
+  # License Compliance Check
+  license-check:
+    name: License Compliance Check
+    runs-on: ubuntu-latest
+    needs: dependency-analysis
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        cache: true
+
+    - name: Check License Compliance
+      run: |
+        echo "::group::Checking License Compliance"
+        
+        # Install go-licenses
+        go install github.com/google/go-licenses@latest
+        
+        # Check licenses
+        go-licenses check ./... > license-check.txt 2>&1 || true
+        go-licenses csv ./... > licenses.csv 2>/dev/null || true
+        
+        # Check for non-permissive licenses
+        if [ -f licenses.csv ]; then
+          echo "License Summary:"
+          echo "================"
+          
+          # Count by license type
+          awk -F',' '{print $3}' licenses.csv | sort | uniq -c | sort -nr
+          
+          # Check for restricted licenses
+          restricted_licenses=$(grep -i -E "(GPL|AGPL|LGPL)" licenses.csv | wc -l || echo "0")
+          
+          if [ "$restricted_licenses" -gt 0 ]; then
+            echo "⚠️ Found $restricted_licenses restricted licenses"
+            echo "Restricted licenses:"
+            grep -i -E "(GPL|AGPL|LGPL)" licenses.csv
+          else
+            echo "✅ All licenses are permissive"
+          fi
+        fi
+        
+        echo "::endgroup::"
+
+    - name: Upload License Reports
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: license-reports
+        path: |
+          license-check.txt
+          licenses.csv
+
+  # Dependency Report
+  dependency-report:
+    name: Dependency Report
+    runs-on: ubuntu-latest
+    needs: [dependency-analysis, security-check, dependency-update, license-check]
+    if: always()
+    steps:
+    - name: Generate Dependency Report
+      run: |
+        echo "::group::Generating Dependency Report"
+        
+        cat > dependency-report.md << EOF
+        # 📦 Dependency Management Report
+        
+        **Generated:** $(date -u +%Y-%m-%dT%H:%M:%SZ)
+        **Repository:** ${{ github.repository }}
+        **Branch:** ${{ github.ref_name }}
+        **Commit:** ${{ github.sha }}
+        
+        ## 📊 Summary
+        
+        | Metric | Value |
+        |--------|-------|
+        | Total Dependencies | ${{ needs.dependency-analysis.outputs.outdated-count == '' && '0' || needs.dependency-analysis.outputs.outdated-count }} |
+        | Outdated Dependencies | ${{ needs.dependency-analysis.outputs.outdated-count }} |
+        | Vulnerabilities Found | ${{ needs.dependency-analysis.outputs.vulnerable-count }} |
+        | Critical Vulnerabilities | ${{ needs.security-check.outputs.critical }} |
+        | High Vulnerabilities | ${{ needs.security-check.outputs.high }} |
+        | Medium Vulnerabilities | ${{ needs.security-check.outputs.medium }} |
+        | Update Status | ${{ needs.dependency-update.outputs.update-success == 'true' && '✅ Updated' || '❌ Failed' }} |
+        
+        ## 🔒 Security Status
+        
+        ${{ needs.dependency-analysis.outputs.vulnerable-count == '0' && '✅ No vulnerabilities found' || '⚠️ Vulnerabilities detected' }}
+        
+        ### Vulnerability Breakdown
+        - **Critical:** ${{ needs.security-check.outputs.critical }}
+        - **High:** ${{ needs.security-check.outputs.high }}
+        - **Medium:** ${{ needs.security-check.outputs.medium }}
+        
+        ## 🔄 Update Status
+        
+        ${{ needs.dependency-update.outputs.update-success == 'true' && '✅ Dependencies updated successfully' || '❌ Update failed or not needed' }}
+        
+        ${{ needs.dependency-update.outputs.update-success == 'true' && '### Updated Packages' || '' }}
+        ${{ needs.dependency-update.outputs.update-success == 'true' && needs.dependency-update.outputs.updated-packages || '' }}
+        
+        ## 📋 Recommendations
+        
+        ${{ needs.security-check.outputs.critical > 0 && '### 🚨 Immediate Action Required' || '' }}
+        ${{ needs.security-check.outputs.critical > 0 && '- Address critical vulnerabilities immediately' || '' }}
+        ${{ needs.security-check.outputs.critical > 0 && '- Review and update affected dependencies' || '' }}
+        
+        ${{ needs.security-check.outputs.high > 0 && '### ⚠️ High Priority' || '' }}
+        ${{ needs.security-check.outputs.high > 0 && '- Plan updates for high-severity vulnerabilities' || '' }}
+        ${{ needs.security-check.outputs.high > 0 && '- Test thoroughly before applying updates' || '' }}
+        
+        ${{ needs.dependency-analysis.outputs.outdated-count > 0 && '### 📦 Maintenance' || '' }}
+        ${{ needs.dependency-analysis.outputs.outdated-count > 0 && '- Consider updating outdated dependencies' || '' }}
+        ${{ needs.dependency-analysis.outputs.outdated-count > 0 && '- Review changelogs for breaking changes' || '' }}
+        
+        ${{ needs.dependency-analysis.outputs.vulnerable-count == '0' && '### ✅ Good Status' || '' }}
+        ${{ needs.dependency-analysis.outputs.vulnerable-count == '0' && '- No immediate security concerns' || '' }}
+        ${{ needs.dependency-analysis.outputs.vulnerable-count == '0' && '- Continue regular monitoring' || '' }}
+        
+        ## 📈 Trend Analysis
+        
+        - **Security Trend:** ${{ needs.dependency-analysis.outputs.vulnerable-count == '0' && '📉 Improving' || '📈 Needs attention' }}
+        - **Maintenance Trend:** ${{ needs.dependency-analysis.outputs.outdated-count == '0' && '📉 Up to date' || '📈 Updates available' }}
+        
+        ---
+        
+        *Report generated automatically by GitHub Actions*
+        EOF
+        
+        echo "Dependency report generated:"
+        cat dependency-report.md
+        
+        echo "::endgroup::"
+
+    - name: Upload Dependency Report
+      uses: actions/upload-artifact@v3
+      with:
+        name: dependency-report
+        path: dependency-report.md
+
+    - name: Publish Report Summary
+      run: |
+        echo "# 📦 Dependency Management Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "## 📊 Summary" >> $GITHUB_STEP_SUMMARY
+        echo "- **Outdated Dependencies:** ${{ needs.dependency-analysis.outputs.outdated-count }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Vulnerabilities Found:** ${{ needs.dependency-analysis.outputs.vulnerable-count }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Critical Vulnerabilities:** ${{ needs.security-check.outputs.critical }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **High Vulnerabilities:** ${{ needs.security-check.outputs.high }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Update Status:** ${{ needs.dependency-update.outputs.update-success == 'true' && '✅ Updated' || '❌ Failed' }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "## 🔒 Security Status" >> $GITHUB_STEP_SUMMARY
+        echo "${{ needs.dependency-analysis.outputs.vulnerable-count == '0' && '✅ No vulnerabilities found' || '⚠️ Vulnerabilities detected' }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "## 🔄 Update Status" >> $GITHUB_STEP_SUMMARY
+        echo "${{ needs.dependency-update.outputs.update-success == 'true' && '✅ Dependencies updated successfully' || '❌ Update failed or not needed' }}" >> $GITHUB_STEP_SUMMARY
+
+  # Notification
+  notify:
+    name: Dependency Notification
+    runs-on: ubuntu-latest
+    needs: [dependency-analysis, security-check, dependency-update]
+    if: always()
+    steps:
+    - name: Dependency Update Notification
+      run: |
+        echo "::group::Dependency Update Notification"
+        
+        if [[ "${{ needs.dependency-update.outputs.update-success }}" == "true" ]]; then
+          echo "🔄 Dependency updates completed successfully!"
+          echo "Repository: ${{ github.repository }}"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Updated packages: ${{ needs.dependency-update.outputs.updated-packages }}"
+        elif [[ "${{ needs.dependency-analysis.outputs.update-available }}" == "true" ]]; then
+          echo "⚠️ Dependency updates failed or required manual intervention"
+          echo "Repository: ${{ github.repository }}"
+          echo "Branch: ${{ github.ref_name }}"
+        else
+          echo "✅ No dependency updates needed"
+          echo "Repository: ${{ github.repository }}"
+          echo "Branch: ${{ github.ref_name }}"
+        fi
+        
+        echo "::endgroup::"

@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: tlsai-agent
+  labels:
+    name: tlsai-agent
+    app.kubernetes.io/name: tlsai-agent
+    app.kubernetes.io/component: infrastructure
+    app.kubernetes.io/part-of: tlsai-agent
+    app.kubernetes.io/managed-by: kubernetes
+  annotations:
+    description: "TLSAIAgent namespace for enterprise deployment"
+    contact: "sbusanelli@example.com"
+    created-by: "Kubernetes deployment automation"
+spec:
+  finalizers:
+    - kubernetes

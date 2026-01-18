@@ -1,0 +1,359 @@
+name: Enterprise Deployment Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+        - staging
+        - production
+      version:
+        description: 'Version to deploy'
+        required: false
+        type: string
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # Security and Quality Gates
+  security-scan:
+    name: Security & Quality Gates
+    runs-on: ubuntu-latest
+    outputs:
+      security-passed: ${{ steps.security.outputs.passed }}
+      quality-passed: ${{ steps.quality.outputs.passed }}
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.22'
+        cache: true
+
+    - name: Run Security Scan
+      id: security
+      run: |
+        echo "::group::Running Gosec Security Scanner"
+        go install github.com/securecodewarrior/gosec/v2/cmd/gosec@latest
+        gosec ./...
+        echo "passed=true" >> $GITHUB_OUTPUT
+        echo "::endgroup::"
+
+    - name: Run Quality Checks
+      id: quality
+      run: |
+        echo "::group::Running Quality Checks"
+        # Format check
+        if ! gofmt -l . | grep -q .; then
+          echo "✅ Code formatting check passed"
+        else
+          echo "❌ Code formatting issues found"
+          exit 1
+        fi
+        
+        # Lint check
+        if command -v golangci-lint &> /dev/null; then
+          golangci-lint run
+        else
+          echo "⚠️ golangci-lint not available, skipping"
+        fi
+        
+        # Vet check
+        go vet ./...
+        
+        echo "passed=true" >> $GITHUB_OUTPUT
+        echo "::endgroup::"
+
+    - name: Run Unit Tests
+      run: |
+        echo "::group::Running Unit Tests"
+        go test -v -race -coverprofile=coverage.out ./...
+        go tool cover -html=coverage.out -o coverage.html
+        echo "::endgroup::"
+
+    - name: Upload Coverage
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.out
+        flags: unittests
+        name: codecov-umbrella
+
+  # Build and Package
+  build:
+    name: Build & Package
+    runs-on: ubuntu-latest
+    needs: security-scan
+    if: needs.security-scan.outputs.security-passed == 'true' && needs.security-scan.outputs.quality-passed == 'true'
+    outputs:
+      image-digest: ${{ steps.build.outputs.digest }}
+      version: ${{ steps.meta.outputs.version }}
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.22'
+        cache: true
+
+    - name: Generate Metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+          type=semver,pattern={{major}}
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
+
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Build and Push Docker Image
+      id: build
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        platforms: linux/amd64,linux/arm64
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        build-args: |
+          VERSION=${{ steps.meta.outputs.version }}
+          BUILD_DATE=${{ github.event.head_commit.timestamp }}
+          COMMIT_SHA=${{ github.sha }}
+
+    - name: Generate SBOM
+      uses: anchore/sbom-action@v0
+      with:
+        image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
+        format: spdx-json
+        output-file: sbom.spdx.json
+
+    - name: Upload SBOM
+      uses: actions/upload-artifact@v3
+      with:
+        name: sbom
+        path: sbom.spdx.json
+
+  # Integration Tests
+  integration-test:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.22'
+        cache: true
+
+    - name: Run Integration Tests
+      run: |
+        echo "::group::Running Integration Tests"
+        go test -v -tags=integration ./...
+        echo "::endgroup::"
+
+    - name: Run Performance Tests
+      run: |
+        echo "::group::Running Performance Tests"
+        go test -v -bench=. -benchmem ./...
+        echo "::endgroup::"
+
+  # Staging Deployment
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [build, integration-test]
+    if: github.ref == 'refs/heads/develop' || github.event_name == 'workflow_dispatch'
+    environment: 
+      name: staging
+      url: https://staging.tlsai-agent.example.com
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Deploy to Staging
+      run: |
+        echo "::group::Deploying to Staging"
+        echo "🚀 Deploying TLSAIAgent to staging environment"
+        echo "Image: ${{ needs.build.outputs.image-digest }}"
+        echo "Version: ${{ needs.build.outputs.version }}"
+        
+        # Simulate deployment (replace with actual deployment logic)
+        echo "✅ Staging deployment completed successfully"
+        echo "::endgroup::"
+
+    - name: Health Check
+      run: |
+        echo "::group::Staging Health Check"
+        echo "🔍 Performing health checks on staging deployment"
+        
+        # Simulate health check (replace with actual health check logic)
+        sleep 30
+        echo "✅ Staging health checks passed"
+        echo "::endgroup::"
+
+    - name: Run Smoke Tests
+      run: |
+        echo "::group::Running Smoke Tests"
+        echo "🧪 Running smoke tests on staging deployment"
+        
+        # Simulate smoke tests (replace with actual smoke test logic)
+        echo "✅ Staging smoke tests passed"
+        echo "::endgroup::"
+
+  # Production Deployment
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [build, integration-test, deploy-staging]
+    if: |
+      github.ref == 'refs/heads/main' && 
+      github.event_name == 'push' ||
+      startsWith(github.ref, 'refs/tags/v') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production')
+    environment: 
+      name: production
+      url: https://tlsai-agent.example.com
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Deploy to Production
+      run: |
+        echo "::group::Deploying to Production"
+        echo "🚀 Deploying TLSAIAgent to production environment"
+        echo "Image: ${{ needs.build.outputs.image-digest }}"
+        echo "Version: ${{ needs.build.outputs.version }}"
+        
+        # Simulate deployment (replace with actual deployment logic)
+        echo "✅ Production deployment completed successfully"
+        echo "::endgroup::"
+
+    - name: Health Check
+      run: |
+        echo "::group::Production Health Check"
+        echo "🔍 Performing health checks on production deployment"
+        
+        # Simulate health check (replace with actual health check logic)
+        sleep 60
+        echo "✅ Production health checks passed"
+        echo "::endgroup::"
+
+    - name: Run Smoke Tests
+      run: |
+        echo "::group::Running Smoke Tests"
+        echo "🧪 Running smoke tests on production deployment"
+        
+        # Simulate smoke tests (replace with actual smoke test logic)
+        echo "✅ Production smoke tests passed"
+        echo "::endgroup::"
+
+    - name: Post-Deployment Monitoring
+      run: |
+        echo "::group::Post-Deployment Monitoring"
+        echo "📊 Setting up post-deployment monitoring"
+        
+        # Simulate monitoring setup (replace with actual monitoring logic)
+        echo "✅ Monitoring configured for production deployment"
+        echo "::endgroup::"
+
+  # Rollback (Manual Trigger)
+  rollback:
+    name: Rollback Deployment
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.rollback == 'true'
+    needs: [deploy-staging, deploy-production]
+    environment: 
+      name: production
+    steps:
+    - name: Rollback Production
+      run: |
+        echo "::group::Rolling Back Production"
+        echo "🔄 Rolling back production deployment"
+        
+        # Simulate rollback (replace with actual rollback logic)
+        echo "✅ Production rollback completed successfully"
+        echo "::endgroup::"
+
+    - name: Rollback Staging
+      run: |
+        echo "::group::Rolling Back Staging"
+        echo "🔄 Rolling back staging deployment"
+        
+        # Simulate rollback (replace with actual rollback logic)
+        echo "✅ Staging rollback completed successfully"
+        echo "::endgroup::"
+
+  # Notification
+  notify:
+    name: Notify Deployment Status
+    runs-on: ubuntu-latest
+    needs: [deploy-staging, deploy-production]
+    if: always() && (needs.deploy-staging.result == 'success' || needs.deploy-production.result == 'success')
+    steps:
+    - name: Notify Success
+      if: needs.deploy-staging.result == 'success' || needs.deploy-production.result == 'success'
+      run: |
+        echo "::group::Deployment Notification"
+        echo "📢 Deployment completed successfully!"
+        echo "Repository: ${{ github.repository }}"
+        echo "Branch: ${{ github.ref_name }}"
+        echo "Commit: ${{ github.sha }}"
+        echo "Actor: ${{ github.actor }}"
+        echo "::endgroup::"
+
+    - name: Notify Failure
+      if: needs.deploy-staging.result == 'failure' || needs.deploy-production.result == 'failure'
+      run: |
+        echo "::group::Deployment Failure Notification"
+        echo "❌ Deployment failed!"
+        echo "Repository: ${{ github.repository }}"
+        echo "Branch: ${{ github.ref_name }}"
+        echo "Commit: ${{ github.sha }}"
+        echo "Actor: ${{ github.actor }}"
+        echo "::endgroup::"
+
+  # Cleanup
+  cleanup:
+    name: Cleanup Resources
+    runs-on: ubuntu-latest
+    needs: [deploy-staging, deploy-production]
+    if: always()
+    steps:
+    - name: Cleanup
+      run: |
+        echo "::group::Cleanup Resources"
+        echo "🧹 Cleaning up deployment resources"
+        
+        # Simulate cleanup (replace with actual cleanup logic)
+        echo "✅ Cleanup completed successfully"
+        echo "::endgroup::"

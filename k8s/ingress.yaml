@@ -1,0 +1,395 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: tlsai-agent-ingress
+  namespace: tlsai-agent
+  labels:
+    app.kubernetes.io/name: tlsai-agent
+    app.kubernetes.io/component: ingress
+    app.kubernetes.io/part-of: tlsai-agent
+    app.kubernetes.io/managed-by: kubernetes
+  annotations:
+    description: "TLSAIAgent ingress for external access"
+    contact: "sbusanelli@example.com"
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/ssl-ciphers: "ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-CHACHA20-POLY1305"
+    nginx.ingress.kubernetes.io/ssl-protocols: "TLSv1.2 TLSv1.3"
+    nginx.ingress.kubernetes.io/ssl-prefer-server-ciphers: "true"
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-buffer-size: "16k"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "30"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "30"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "30"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+    nginx.ingress.kubernetes.io/enable-modsecurity: "true"
+    nginx.ingress.kubernetes.io/modsecurity-snippet: |
+      SecRuleEngine On
+      SecRequestBodyAccess On
+      SecResponseBodyAccess On
+      SecResponseBodyMimeType text/plain text/html text/xml application/json
+      SecRule REQUEST_HEADERS:Content-Type "text/xml" \
+        "id:'200001',phase:1,t:none,t:lowercase,pass,nolog,ctl:requestBodyProcessor=XML"
+      SecRule REQUEST_HEADERS:Content-Type "application/json" \
+        "id:'200002',phase:1,t:none,t:lowercase,pass,nolog,ctl:requestBodyProcessor=JSON"
+      SecRule ARGS "@detectSQLi" \
+        "id:200003,phase:2,block,msg:'SQL Injection Attack Detected',logdata:'Matched Data: %{MATCHED_VAR} found within %{MATCHED_VAR_NAME}',tag:'application-multi',tag:'language-multi',tag:'platform-multi',tag:'attack-sqli'"
+      SecRule ARGS "@detectXSS" \
+        "id:200004,phase:2,block,msg:'XSS Attack Detected',logdata:'Matched Data: %{MATCHED_VAR} found within %{MATCHED_VAR_NAME}',tag:'application-multi',tag:'language-multi',tag:'platform-multi',tag:'attack-xss'"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    cert-manager.io/issue-temporary-certificate: "true"
+    acme.cert-manager.io/http01-ingress-class: "nginx"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      more_set_headers "X-Frame-Options: DENY";
+      more_set_headers "X-Content-Type-Options: nosniff";
+      more_set_headers "X-XSS-Protection: 1; mode=block";
+      more_set_headers "Referrer-Policy: strict-origin-when-cross-origin";
+      more_set_headers "Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self'; frame-ancestors 'none';";
+      more_set_headers "Strict-Transport-Security: max-age=31536000; includeSubDomains; preload";
+      more_set_headers "Permissions-Policy: geolocation=(), microphone=(), camera=(), payment=(), usb=()";
+spec:
+  tls:
+  - hosts:
+    - tlsai-agent.example.com
+    - api.tlsai-agent.example.com
+    secretName: tlsai-agent-tls
+  rules:
+  - host: tlsai-agent.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: tlsai-agent
+            port:
+              number: 443
+  - host: api.tlsai-agent.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: tlsai-agent
+            port:
+              number: 443
+  - host: tlsai-agent.example.com
+    http:
+      paths:
+      - path: /metrics
+        pathType: Prefix
+        backend:
+          service:
+            name: tlsai-agent
+            port:
+              number: 9090
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: tlsai-agent-metrics-ingress
+  namespace: tlsai-agent
+  labels:
+    app.kubernetes.io/name: tlsai-agent
+    app.kubernetes.io/component: ingress
+    app.kubernetes.io/part-of: tlsai-agent
+    app.kubernetes.io/managed-by: kubernetes
+  annotations:
+    description: "TLSAIAgent metrics ingress for monitoring"
+    contact: "sbusanelli@example.com"
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/ssl-protocols: "TLSv1.2 TLSv1.3"
+    nginx.ingress.kubernetes.io/ssl-prefer-server-ciphers: "true"
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+    nginx.ingress.kubernetes.io/whitelist-source-range: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+    nginx.ingress.kubernetes.io/auth-type: "basic"
+    nginx.ingress.kubernetes.io/auth-secret: "tlsai-agent-metrics-auth"
+    nginx.ingress.kubernetes.io/auth-realm: "TLSAIAgent Metrics Access"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    acme.cert-manager.io/http01-ingress-class: "nginx"
+spec:
+  tls:
+  - hosts:
+    - metrics.tlsai-agent.example.com
+    secretName: tlsai-agent-metrics-tls
+  rules:
+  - host: metrics.tlsai-agent.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: tlsai-agent
+            port:
+              number: 9090
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: tlsai-agent-network-policy
+  namespace: tlsai-agent
+  labels:
+    app.kubernetes.io/name: tlsai-agent
+    app.kubernetes.io/component: network-policy
+    app.kubernetes.io/part-of: tlsai-agent
+    app.kubernetes.io/managed-by: kubernetes
+  annotations:
+    description: "TLSAIAgent network policy for security"
+    contact: "sbusanelli@example.com"
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: tlsai-agent
+      app.kubernetes.io/component: application
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: tlsai-agent
+          app.kubernetes.io/component: application
+    ports:
+    - protocol: TCP
+      port: 8080
+    - protocol: TCP
+      port: 8443
+    - protocol: TCP
+      port: 9090
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    - namespaceSelector:
+        matchLabels:
+          name: vault
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: tlsai-agent
+          app.kubernetes.io/component: application
+    ports:
+    - protocol: TCP
+      port: 53
+      port: 53
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 8443
+    - protocol: TCP
+      port: 8200
+    - to: []
+      ports:
+      - protocol: TCP
+        port: 80
+      - protocol: TCP
+        port: 443
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: tlsai-agent-metrics-auth
+  namespace: tlsai-agent
+  labels:
+    app.kubernetes.io/name: tlsai-agent
+    app.kubernetes.io/component: secret
+    app.kubernetes.io/part-of: tlsai-agent
+    app.kubernetes.io/managed-by: kubernetes
+  annotations:
+    description: "TLSAIAgent metrics authentication"
+    contact: "sbusanelli@example.com"
+type: Opaque
+data:
+  auth: YWRtaW46JGFwcjEkNk9YbE9UZ0kkVlJ5U3l5TjZ5L3JLZ3d5S2xZL0N6MA== # admin:password
+
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: tlsai-agent-tls
+  namespace: tlsai-agent
+  labels:
+    app.kubernetes.io/name: tlsai-agent
+    app.kubernetes.io/component: certificate
+    app.kubernetes.io/part-of: tlsai-agent
+    app.kubernetes.io/managed-by: kubernetes
+  annotations:
+    description: "TLSAIAgent TLS certificate"
+    contact: "sbusanelli@example.com"
+spec:
+  secretName: tlsai-agent-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+  - tlsai-agent.example.com
+  - api.tlsai-agent.example.com
+  - "*.tlsai-agent.example.com"
+
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: tlsai-agent-metrics-tls
+  namespace: tlsai-agent
+  labels:
+    app.kubernetes.io/name: tlsai-agent
+    app.kubernetes.io/component: certificate
+    app.kubernetes.io/part-of: tlsai-agent
+    app.kubernetes.io/managed-by: kubernetes
+  annotations:
+    description: "TLSAIAgent metrics TLS certificate"
+    contact: "sbusanelli@example.com"
+spec:
+  secretName: tlsai-agent-metrics-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+  - metrics.tlsai-agent.example.com
+
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: tlsai-agent
+  namespace: tlsai-agent
+  labels:
+    app.kubernetes.io/name: tlsai-agent
+    app.kubernetes.io/component: monitoring
+    app.kubernetes.io/part-of: tlsai-agent
+    app.kubernetes.io/managed-by: kubernetes
+    release: prometheus
+  annotations:
+    description: "TLSAIAgent service monitor for Prometheus"
+    contact: "sbusanelli@example.com"
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: tlsai-agent
+      app.kubernetes.io/component: service
+  endpoints:
+  - port: metrics
+    path: /metrics
+    interval: 30s
+    scrapeTimeout: 10s
+    honorLabels: true
+    metricRelabelings:
+    - sourceLabels: [__name__]
+      regex: 'go_.*|process_.*|prometheus_.*'
+      action: drop
+
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: tlsai-agent-alerts
+  namespace: tlsai-agent
+  labels:
+    app.kubernetes.io/name: tlsai-agent
+    app.kubernetes.io/component: monitoring
+    app.kubernetes.io/part-of: tlsai-agent
+    app.kubernetes.io/managed-by: kubernetes
+    release: prometheus
+  annotations:
+    description: "TLSAIAgent Prometheus alerting rules"
+    contact: "sbusanelli@example.com"
+spec:
+  groups:
+  - name: tlsai-agent.rules
+    rules:
+    - alert: TLSAIAgentDown
+      expr: up{job="tlsai-agent"} == 0
+      for: 1m
+      labels:
+        severity: critical
+        component: tlsai-agent
+      annotations:
+        summary: "TLSAIAgent is down"
+        description: "TLSAIAgent {{ $labels.instance }} has been down for more than 1 minute."
+        runbook_url: "https://github.com/sbusanelli/TLSAIAgent/blob/main/docs/runbook.md"
+    - alert: TLSAIAgentHighMemoryUsage
+      expr: (container_memory_usage_bytes{pod=~"tlsai-agent-.*"} / container_spec_memory_limit_bytes{pod=~"tlsai-agent-.*"}) * 100 > 80
+      for: 5m
+      labels:
+        severity: warning
+        component: tlsai-agent
+      annotations:
+        summary: "TLSAIAgent high memory usage"
+        description: "TLSAIAgent {{ $labels.pod }} memory usage is {{ $value }}% for more than 5 minutes."
+        runbook_url: "https://github.com/sbusanelli/TLSAIAgent/blob/main/docs/runbook.md"
+    - alert: TLSAIAgentHighCPUUsage
+      expr: rate(container_cpu_usage_seconds_total{pod=~"tlsai-agent-.*"}[5m]) * 100 > 80
+      for: 5m
+      labels:
+        severity: warning
+        component: tlsai-agent
+      annotations:
+        summary: "TLSAIAgent high CPU usage"
+        description: "TLSAIAgent {{ $labels.pod }} CPU usage is {{ $value }}% for more than 5 minutes."
+        runbook_url: "https://github.com/sbusanelli/TLSAIAgent/blob/main/docs/runbook.md"
+    - alert: TLSAIAgentHighErrorRate
+      expr: rate(tlsai_agent_requests_total{status=~"5.."}[5m]) / rate(tlsai_agent_requests_total[5m]) * 100 > 5
+      for: 2m
+      labels:
+        severity: warning
+        component: tlsai-agent
+      annotations:
+        summary: "TLSAIAgent high error rate"
+        description: "TLSAIAgent {{ $labels.instance }} error rate is {{ $value }}% for more than 2 minutes."
+        runbook_url: "https://github.com/sbusanelli/TLSAIAgent/blob/main/docs/runbook.md"
+    - alert: TLSAIAgentHighLatency
+      expr: histogram_quantile(0.95, rate(tlsai_agent_request_duration_seconds_bucket[5m])) > 0.5
+      for: 5m
+      labels:
+        severity: warning
+        component: tlsai-agent
+      annotations:
+        summary: "TLSAIAgent high latency"
+        description: "TLSAIAgent {{ $labels.instance }} 95th percentile latency is {{ $value }}s for more than 5 minutes."
+        runbook_url: "https://github.com/sbusanelli/TLSAIAgent/blob/main/docs/runbook.md"
+    - alert: TLSAIAgentCertificateExpiry
+      expr: tlsai_agent_certificate_expires_in_seconds < 86400 * 7
+      for: 1h
+      labels:
+        severity: warning
+        component: tlsai-agent
+      annotations:
+        summary: "TLSAIAgent certificate expiring soon"
+        description: "TLSAIAgent {{ $labels.instance }} certificate for {{ $labels.domain }} expires in {{ $value }} seconds."
+        runbook_url: "https://github.com/sbusanelli/TLSAIAgent/blob/main/docs/runbook.md"
+    - alert: TLSAIAgentCertificateExpired
+      expr: tlsai_agent_certificate_expires_in_seconds < 0
+      for: 0m
+      labels:
+        severity: critical
+        component: tlsai-agent
+      annotations:
+        summary: "TLSAIAgent certificate expired"
+        description: "TLSAIAgent {{ $labels.instance }} certificate for {{ $labels.domain }} has expired."
+        runbook_url: "https://github.com/sbusanelli/TLSAIAgent/blob/main/docs/runbook.md"
