@@ -37,6 +37,14 @@ jobs:
         go build -o tlsai-agent .
         echo "::endgroup::"
 
+    - name: Setup Test Certificates
+      run: |
+        echo "::group::Setting up test certificates"
+        mkdir -p certs
+        # Generate self-signed certificate for testing
+        openssl req -x509 -newkey rsa:2048 -keyout certs/server.key -out certs/server.crt -days 365 -nodes -subj "/C=US/ST=CA/L=SF/O=Test/OU=Test/CN=localhost"
+        echo "::endgroup::"
+
     - name: Start Application
       run: |
         echo "::group::Starting TLSAIAgent"
@@ -58,11 +66,11 @@ jobs:
           exit 1
         fi
 
-        # Check HTTP health endpoint (if available)
+        # Check HTTPS health endpoint (if available)
         response_time=0
         if command -v curl &> /dev/null; then
           start_time=$(date +%s%N)
-          if curl -f -s http://localhost:8080/health > /dev/null 2>&1; then
+          if curl -f -s -k https://localhost:8443/health > /dev/null 2>&1; then
             end_time=$(date +%s%N)
             response_time=$(( (end_time - start_time) / 1000000 ))
             echo "✅ Health endpoint responding"
@@ -205,8 +213,12 @@ jobs:
         # Create log directory
         mkdir -p logs
 
-        # Run application with logging
-        go run . --log-level=info --log-file=logs/tlsai-agent.log &
+        # Setup certificates first
+        mkdir -p certs
+        openssl req -x509 -newkey rsa:2048 -keyout certs/server.key -out certs/server.crt -days 365 -nodes -subj "/C=US/ST=CA/L=SF/O=Test/OU=Test/CN=localhost"
+
+        # Run application with logging redirected to file
+        ./tlsai-agent > logs/tlsai-agent.log 2>&1 &
         AGENT_PID=$!
 
         # Let it run for a bit
@@ -277,8 +289,12 @@ jobs:
         # Build application
         go build -o tlsai-agent .
 
-        # Start application with metrics enabled
-        ./tlsai-agent --enable-metrics &
+        # Setup certificates
+        mkdir -p certs
+        openssl req -x509 -newkey rsa:2048 -keyout certs/server.key -out certs/server.crt -days 365 -nodes -subj "/C=US/ST=CA/L=SF/O=Test/OU=Test/CN=localhost"
+
+        # Start application
+        ./tlsai-agent &
         AGENT_PID=$!
 
         sleep 5
