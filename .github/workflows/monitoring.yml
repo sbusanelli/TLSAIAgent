@@ -34,7 +34,7 @@ jobs:
     - name: Build Application
       run: |
         echo "::group::Building TLSAIAgent"
-        go build -o tlsai-agent ./...
+        go build -o tlsai-agent .
         echo "::endgroup::"
 
     - name: Start Application
@@ -50,14 +50,14 @@ jobs:
       id: health
       run: |
         echo "::group::Performing Health Check"
-        
+
         # Check if application is running
         if ! kill -0 $AGENT_PID 2>/dev/null; then
           echo "❌ Application is not running"
           echo "status=unhealthy" >> $GITHUB_OUTPUT
           exit 1
         fi
-        
+
         # Check HTTP health endpoint (if available)
         response_time=0
         if command -v curl &> /dev/null; then
@@ -70,7 +70,7 @@ jobs:
             echo "⚠️ Health endpoint not responding, but process is running"
           fi
         fi
-        
+
         echo "status=healthy" >> $GITHUB_OUTPUT
         echo "response-time=$response_time" >> $GITHUB_OUTPUT
         echo "::endgroup::"
@@ -107,24 +107,24 @@ jobs:
       id: perf
       run: |
         echo "::group::Running Performance Tests"
-        
+
         # Run benchmark tests
         go test -bench=. -benchmem -run=^$ ./... > benchmark.txt 2>&1 || true
-        
+
         # Extract performance metrics
         if [ -f benchmark.txt ]; then
           # Parse benchmark results
           ops_per_sec=$(grep -oP 'ns/op.*\K\d+' benchmark.txt | head -1 || echo "0")
           memory_per_op=$(grep -oP 'B/op.*\K\d+' benchmark.txt | head -1 || echo "0")
           allocs_per_op=$(grep -oP 'allocs/op.*\K\d+' benchmark.txt | head -1 || echo "0")
-          
+
           # Calculate performance score (simplified)
           if [ "$ops_per_sec" -gt 0 ]; then
             score=$((ops_per_sec / 1000)) # Convert to thousands
           else
             score=0
           fi
-          
+
           echo "score=$score" >> $GITHUB_OUTPUT
           echo "memory=$memory_per_op" >> $GITHUB_OUTPUT
           echo "cpu=$ops_per_sec" >> $GITHUB_OUTPUT
@@ -133,11 +133,11 @@ jobs:
           echo "memory=0" >> $GITHUB_OUTPUT
           echo "cpu=0" >> $GITHUB_OUTPUT
         fi
-        
+
         echo "::endgroup::"
 
     - name: Upload Benchmark Results
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: benchmark-results
@@ -156,32 +156,32 @@ jobs:
       id: resources
       run: |
         echo "::group::Checking Resource Usage"
-        
+
         # Disk usage
         disk_usage=$(df -h . | awk 'NR==2 {print $5}' | sed 's/%//')
         echo "disk=$disk_usage" >> $GITHUB_OUTPUT
-        
+
         # Memory usage
         memory_usage=$(free | awk 'NR==2{printf "%.0f", $3*100/$2}')
         echo "memory=$memory_usage" >> $GITHUB_OUTPUT
-        
+
         # Network usage (simplified)
         network_usage=$(cat /proc/net/dev | grep eth0 | awk '{print $2+$10}' 2>/dev/null || echo "0")
         echo "network=$network_usage" >> $GITHUB_OUTPUT
-        
+
         echo "Disk Usage: ${disk_usage}%"
         echo "Memory Usage: ${memory_usage}%"
         echo "Network Usage: ${network_usage} bytes"
-        
+
         # Check resource thresholds
         if [ "$disk_usage" -gt 80 ]; then
           echo "⚠️ High disk usage: ${disk_usage}%"
         fi
-        
+
         if [ "$memory_usage" -gt 80 ]; then
           echo "⚠️ High memory usage: ${memory_usage}%"
         fi
-        
+
         echo "::endgroup::"
 
   # Log Monitoring
@@ -201,56 +201,56 @@ jobs:
     - name: Run Application with Logging
       run: |
         echo "::group::Running TLSAIAgent with Logging"
-        
+
         # Create log directory
         mkdir -p logs
-        
+
         # Run application with logging
         go run . --log-level=info --log-file=logs/tlsai-agent.log &
         AGENT_PID=$!
-        
+
         # Let it run for a bit
         sleep 10
-        
+
         # Stop application
         kill $AGENT_PID 2>/dev/null || true
         wait $AGENT_PID 2>/dev/null || true
-        
+
         echo "::endgroup::"
 
     - name: Analyze Logs
       run: |
         echo "::group::Analyzing Application Logs"
-        
+
         if [ -f logs/tlsai-agent.log ]; then
           # Count log levels
           error_count=$(grep -c "ERROR" logs/tlsai-agent.log || echo "0")
           warning_count=$(grep -c "WARNING" logs/tlsai-agent.log || echo "0")
           info_count=$(grep -c "INFO" logs/tlsai-agent.log || echo "0")
-          
+
           echo "Log Analysis Results:"
           echo "  ERROR: $error_count"
           echo "  WARNING: $warning_count"
           echo "  INFO: $info_count"
-          
+
           # Check for error patterns
           if [ "$error_count" -gt 0 ]; then
             echo "⚠️ Found $error_count error(s) in logs"
             echo "Last few errors:"
             grep "ERROR" logs/tlsai-agent.log | tail -5
           fi
-          
+
           # Check log size
           log_size=$(du -h logs/tlsai-agent.log | cut -f1)
           echo "Log file size: $log_size"
         else
           echo "⚠️ No log file found"
         fi
-        
+
         echo "::endgroup::"
 
     - name: Upload Logs
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: application-logs
@@ -273,32 +273,32 @@ jobs:
     - name: Collect Application Metrics
       run: |
         echo "::group::Collecting Application Metrics"
-        
+
         # Build application
-        go build -o tlsai-agent ./...
-        
+        go build -o tlsai-agent .
+
         # Start application with metrics enabled
         ./tlsai-agent --enable-metrics &
         AGENT_PID=$!
-        
+
         sleep 5
-        
+
         # Collect metrics (simulated)
         echo "Application Metrics:"
         echo "  Uptime: $(ps -o etime= -p $AGENT_PID | tr -d ' ')"
         echo "  Memory: $(ps -o rss= -p $AGENT_PID | tr -d ' ') KB"
         echo "  CPU: $(ps -o %cpu= -p $AGENT_PID | tr -d ' ')%"
-        
+
         # Stop application
         kill $AGENT_PID 2>/dev/null || true
         wait $AGENT_PID 2>/dev/null || true
-        
+
         echo "::endgroup::"
 
     - name: Generate Metrics Report
       run: |
         echo "::group::Generating Metrics Report"
-        
+
         cat > metrics-report.json << EOF
         {
           "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
@@ -313,14 +313,14 @@ jobs:
           }
         }
         EOF
-        
+
         echo "Metrics report generated:"
         cat metrics-report.json
-        
+
         echo "::endgroup::"
 
     - name: Upload Metrics Report
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: metrics-report
         path: metrics-report.json
@@ -335,38 +335,38 @@ jobs:
     - name: Check Alerts
       run: |
         echo "::group::Checking Alert Conditions"
-        
+
         # Health check alert
         health_status="${{ needs.health-monitoring.outputs.health-status }}"
         if [ "$health_status" != "healthy" ]; then
           echo "🚨 HEALTH ALERT: Application is unhealthy"
         fi
-        
+
         # Performance alert
         performance_score="${{ needs.performance-monitoring.outputs.performance-score }}"
         if [ "$performance_score" -lt 100 ]; then
           echo "⚠️ PERFORMANCE ALERT: Low performance score ($performance_score)"
         fi
-        
+
         # Resource alerts
         disk_usage="${{ needs.resource-monitoring.outputs.disk-usage }}"
         memory_usage="${{ needs.resource-monitoring.outputs.memory-usage }}"
-        
+
         if [ "$disk_usage" -gt 80 ]; then
           echo "⚠️ RESOURCE ALERT: High disk usage ($disk_usage%)"
         fi
-        
+
         if [ "$memory_usage" -gt 80 ]; then
           echo "⚠️ RESOURCE ALERT: High memory usage ($memory_usage%)"
         fi
-        
+
         echo "::endgroup::"
 
     - name: Send Alert Notification
       if: failure()
       run: |
         echo "::group::Sending Alert Notification"
-        
+
         echo "🚨 MONITORING ALERT"
         echo "Repository: ${{ github.repository }}"
         echo "Branch: ${{ github.ref_name }}"
@@ -378,7 +378,7 @@ jobs:
         echo "- Performance Score: ${{ needs.performance-monitoring.outputs.performance-score }}"
         echo "- Disk Usage: ${{ needs.resource-monitoring.outputs.disk-usage }}%"
         echo "- Memory Usage: ${{ needs.resource-monitoring.outputs.memory-usage }}%"
-        
+
         echo "::endgroup::"
 
   # Monitoring Dashboard
@@ -391,62 +391,62 @@ jobs:
     - name: Generate Monitoring Dashboard
       run: |
         echo "::group::Generating Monitoring Dashboard"
-        
+
         cat > monitoring-dashboard.md << EOF
         # 📊 TLSAIAgent Monitoring Dashboard
-        
+
         **Last Updated:** $(date -u +%Y-%m-%dT%H:%M:%SZ)
         **Repository:** ${{ github.repository }}
         **Branch:** ${{ github.ref_name }}
         **Commit:** ${{ github.sha }}
-        
+
         ## 🏥 Health Status
-        
+
         | Metric | Status | Value |
         |--------|--------|-------|
         | Application Health | ${{ needs.health-monitoring.outputs.health-status == 'healthy' && '✅ Healthy' || '❌ Unhealthy' }} | ${{ needs.health-monitoring.outputs.health-status }} |
         | Response Time | ${{ needs.health-monitoring.outputs.response-time }}ms | ${{ needs.health-monitoring.outputs.response-time }} |
-        
+
         ## ⚡ Performance Metrics
-        
+
         | Metric | Value |
         |--------|-------|
         | Performance Score | ${{ needs.performance-monitoring.outputs.performance-score }} |
         | Memory per Operation | ${{ needs.performance-monitoring.outputs.memory }}B |
         | Operations per Second | ${{ needs.performance-monitoring.outputs.cpu }} |
-        
+
         ## 💾 Resource Usage
-        
+
         | Resource | Usage | Status |
         |----------|-------|--------|
         | Disk | ${{ needs.resource-monitoring.outputs.disk-usage }}% | ${{ needs.resource-monitoring.outputs.disk-usage > 80 && '⚠️ High' || '✅ Normal' }} |
         | Memory | ${{ needs.resource-monitoring.outputs.memory-usage }}% | ${{ needs.resource-monitoring.outputs.memory-usage > 80 && '⚠️ High' || '✅ Normal' }} |
         | Network | ${{ needs.resource-monitoring.outputs.network-usage }} bytes | ✅ Normal |
-        
+
         ## 📈 Trends
-        
+
         - **Health:** ${{ needs.health-monitoring.outputs.health-status == 'healthy' && '✅ Stable' || '❌ Issues detected' }}
         - **Performance:** ${{ needs.performance-monitoring.outputs.performance-score > 100 && '✅ Good' || '⚠️ Needs attention' }}
         - **Resources:** ${{ needs.resource-monitoring.outputs.disk-usage < 80 && needs.resource-monitoring.outputs.memory-usage < 80 && '✅ Optimal' || '⚠️ High usage' }}
-        
+
         ## 🔧 Actions Required
-        
+
         ${{ needs.health-monitoring.outputs.health-status != 'healthy' && '- ❌ Check application health immediately' || '' }}
         ${{ needs.performance-monitoring.outputs.performance-score < 100 && '- ⚠️ Investigate performance degradation' || '' }}
         ${{ needs.resource-monitoring.outputs.disk-usage > 80 && '- ⚠️ Consider disk cleanup or expansion' || '' }}
         ${{ needs.resource-monitoring.outputs.memory-usage > 80 && '- ⚠️ Investigate memory usage patterns' || '' }}
-        
+
         ---
         *Dashboard generated automatically by GitHub Actions*
         EOF
-        
+
         echo "Monitoring dashboard generated:"
         cat monitoring-dashboard.md
-        
+
         echo "::endgroup::"
 
     - name: Upload Dashboard
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: monitoring-dashboard
         path: monitoring-dashboard.md
