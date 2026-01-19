@@ -378,7 +378,7 @@ Example migration for shutdown timeout:
 ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 
 // After (feature-configured)
-ctx, cancel := context.WithTimeout(context.Background(), 
+ctx, cancel := context.WithTimeout(context.Background(),
   time.Duration(featureConfig.ShutdownTimeout)*time.Second)
 ```
 

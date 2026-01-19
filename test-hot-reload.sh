@@ -66,16 +66,16 @@ ELAPSED=0
 while [ $ELAPSED -lt $TIMEOUT ]; do
     sleep 1
     ELAPSED=$((ELAPSED + 1))
-    
+
     # Try to connect and get cert
     CURRENT_SERIAL=$(echo | openssl s_client -connect localhost:8443 2>/dev/null | openssl x509 -noout -serial 2>/dev/null | cut -d'=' -f2 || true)
-    
+
     if [ "$CURRENT_SERIAL" = "$NEW_SERIAL" ]; then
         echo "  ✓ New certificate detected after ${ELAPSED}s"
         echo "  ✓ PASS: Hot-reload successful - new cert is now being served"
         break
     fi
-    
+
     if [ $((ELAPSED % 5)) -eq 0 ]; then
         echo "  Waiting... (${ELAPSED}s elapsed, current: $CURRENT_SERIAL)"
     fi

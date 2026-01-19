@@ -274,7 +274,7 @@ curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/insta
 
 ### Issue: Hooks are slow
 
-**Solution:** 
+**Solution:**
 1. Skip slow hooks in CI:
    ```bash
    SKIP=gosec,go-test pre-commit run --all-files
@@ -431,4 +431,3 @@ pre-commit uninstall --hook-type commit-msg
 3. ✅ Run setup script: `./setup-pre-commit-hooks.sh`
 4. ✅ Test hooks: `pre-commit run --all-files`
 5. ✅ Start developing with automatic quality checks!
-

@@ -12,7 +12,7 @@ The `.github/CODEOWNERS` file has been created to define code ownership and revi
 
 ## What is CODEOWNERS?
 
-The CODEOWNERS file tells GitHub who should be requested as a reviewer for pull requests that modify files in your repository. 
+The CODEOWNERS file tells GitHub who should be requested as a reviewer for pull requests that modify files in your repository.
 
 ### Benefits:
 - ✅ Automatically request reviews from code owners
@@ -186,11 +186,11 @@ internal/tlsstore/ @security-team
 
 ## Current Configuration Summary
 
-✅ **CODEOWNERS file created**  
-✅ **Owner**: sbusanelli (sbusanelli@gmail.com)  
-✅ **Coverage**: All files and directories  
-✅ **Ready for**: Pull request reviews  
-⏳ **Next Step**: Enable branch protection if desired  
+✅ **CODEOWNERS file created**
+✅ **Owner**: sbusanelli (sbusanelli@gmail.com)
+✅ **Coverage**: All files and directories
+✅ **Ready for**: Pull request reviews
+⏳ **Next Step**: Enable branch protection if desired
 
 ---
 
