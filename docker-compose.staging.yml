@@ -1,0 +1,147 @@
+# Staging Environment Configuration
+version: '3.8'
+
+services:
+  # TLSAIAgent Service - Staging
+  tlsai-agent:
+    build:
+      context: .
+      target: runtime
+      args:
+        VERSION: ${VERSION:-staging}
+        BUILD_DATE: ${BUILD_DATE:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}
+        COMMIT_SHA: ${COMMIT_SHA:-$(git rev-parse HEAD)}
+        TARGETPLATFORM: linux/amd64
+        TARGETOS: linux
+        TARGETARCH: amd64
+    image: tlsai-agent:${VERSION:-staging}
+    container_name: tlsai-agent-staging
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+      - "8443:8443"
+    environment:
+      - GO_ENV=staging
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - CONFIG_PATH=/etc/tlsai-agent/features.yaml
+      - TLS_CERT_PATH=/etc/tlsai-agent/certs/server.crt
+      - TLS_KEY_PATH=/etc/tlsai-agent/certs/server.key
+      - METRICS_ENABLED=${METRICS_ENABLED:-true}
+      - METRICS_PORT=9090
+      - HEALTH_CHECK_ENABLED=${HEALTH_CHECK_ENABLED:-true}
+      - HEALTH_CHECK_INTERVAL=30s
+      - GRACEFUL_SHUTDOWN_TIMEOUT=30s
+      - CERTIFICATE_WATCHER_ENABLED=true
+    volumes:
+      - ./config:/etc/tlsai-agent:ro
+      - ./certs:/etc/tlsai-agent/certs:ro
+      - ./logs:/var/log/tlsai-agent
+      - tlsai-agent-data:/var/lib/tlsai-agent
+    networks:
+      - tlsai-network-staging
+    depends_on:
+      - redis
+      - postgres
+    healthcheck:
+      test: ["CMD", "curl", "-f", "-k", "https://localhost:8443/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
+  # Redis for staging
+  redis:
+    image: redis:7.2-alpine
+    container_name: tlsai-redis-staging
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-staging123}
+      - REDIS_MAXMEMORY=512mb
+      - REDIS_MAXMEMORY_POLICY=allkeys-lru
+    volumes:
+      - redis-staging-data:/data
+    networks:
+      - tlsai-network-staging
+
+  # PostgreSQL for staging
+  postgres:
+    image: postgres:15-alpine
+    container_name: tlsai-postgres-staging
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-tlsai_agent_staging}
+      - POSTGRES_USER=${POSTGRES_USER:-tlsai_staging}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-staging123}
+    volumes:
+      - postgres-staging-data:/var/lib/postgresql/data
+    networks:
+      - tlsai-network-staging
+
+  # Prometheus for staging
+  prometheus:
+    image: prom/prometheus:v2.45.0
+    container_name: tlsai-prometheus-staging
+    restart: unless-stopped
+    ports:
+      - "9091:9090"
+    volumes:
+      - prometheus-staging-data:/prometheus
+      - ./config/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    networks:
+      - tlsai-network-staging
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=15d'
+      - '--web.enable-lifecycle'
+
+  # Grafana for staging
+  grafana:
+    image: grafana/grafana:10.2.0
+    container_name: tlsai-grafana-staging
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-staging123}
+      - GF_SERVER_ROOT_URL=http://localhost:3000
+    volumes:
+      - grafana-staging-data:/var/lib/grafana
+      - ./config/grafana/provisioning:/etc/grafana/provisioning:ro
+    networks:
+      - tlsai-network-staging
+    depends_on:
+      - prometheus
+
+networks:
+  tlsai-network-staging:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.22.0.0/16
+          gateway: 172.22.0.1
+
+volumes:
+  tlsai-agent-data:
+    driver: local
+  redis-staging-data:
+    driver: local
+  postgres-staging-data:
+    driver: local
+  prometheus-staging-data:
+    driver: local
+  grafana-staging-data:
+    driver: local

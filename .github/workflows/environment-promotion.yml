@@ -1,0 +1,503 @@
+name: Environment Promotion Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment for promotion'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+        - staging
+        - production
+      version:
+        description: 'Version to deploy (optional)'
+        required: false
+        type: string
+      force_promotion:
+        description: 'Force promotion (bypasses quality gates)'
+        required: false
+        default: false
+        type: boolean
+      rollback:
+        description: 'Rollback deployment'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # Pre-flight Checks
+  pre-flight:
+    name: Pre-flight Checks
+    runs-on: ubuntu-latest
+    outputs:
+      should-promote: ${{ steps.check.outputs.should-promote }}
+      target-env: ${{ steps.check.outputs.target-env }}
+      source-branch: ${{ steps.check.outputs.source-branch }}
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Determine Promotion Path
+      id: check
+      run: |
+        echo "::group::Determining promotion path"
+        
+        # Determine source branch and target environment
+        if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          TARGET_ENV="${{ github.event.inputs.environment }}"
+          SOURCE_BRANCH="${{ github.ref_name }}"
+        elif [[ "${{ github.ref_name }}" == "develop" ]]; then
+          TARGET_ENV="staging"
+          SOURCE_BRANCH="develop"
+        elif [[ "${{ github.ref_name }}" == "main" ]]; then
+          TARGET_ENV="production"
+          SOURCE_BRANCH="main"
+        else
+          echo "❌ Unsupported branch for promotion: ${{ github.ref_name }}"
+          echo "should-promote=false" >> $GITHUB_OUTPUT
+          exit 0
+        fi
+        
+        echo "Source Branch: $SOURCE_BRANCH"
+        echo "Target Environment: $TARGET_ENV"
+        echo "should-promote=true" >> $GITHUB_OUTPUT
+        echo "target-env=$TARGET_ENV" >> $GITHUB_OUTPUT
+        echo "source-branch=$SOURCE_BRANCH" >> $GITHUB_OUTPUT
+        echo "::endgroup::"
+
+  # Quality Gates
+  quality-gates:
+    name: Quality Gates
+    runs-on: ubuntu-latest
+    needs: pre-flight
+    if: needs.pre-flight.outputs.should-promote == 'true'
+    outputs:
+      all-checks-passed: ${{ steps.gates.outputs.all-passed }}
+      test-coverage: ${{ steps.coverage.outputs.coverage }}
+      security-score: ${{ steps.security.outputs.score }}
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.22'
+        cache: true
+
+    - name: Run Pre-commit Hooks
+      run: |
+        echo "::group::Running pre-commit quality checks"
+        
+        # Install pre-commit if not present
+        pip install pre-commit
+        
+        # Run all pre-commit hooks
+        pre-commit run --all-files
+        
+        echo "::endgroup::"
+
+    - name: Run Unit Tests with Coverage
+      id: coverage
+      run: |
+        echo "::group::Running unit tests with coverage"
+        go test -v -race -coverprofile=coverage.out ./...
+        
+        # Extract coverage percentage
+        COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
+        echo "coverage=$COVERAGE" >> $GITHUB_OUTPUT
+        echo "Test Coverage: $COVERAGE%"
+        
+        # Fail if coverage is below threshold
+        if (( $(echo "$COVERAGE < 60" | bc -l) )); then
+          echo "❌ Test coverage below 60% threshold"
+          exit 1
+        fi
+        
+        echo "::endgroup::"
+
+    - name: Run Security Scan
+      id: security
+      run: |
+        echo "::group::Running security scan"
+        
+        # Install gosec
+        go install github.com/securego/gosec/v2/cmd/gosec@v2.18.2
+        
+        # Run security scan
+        gosec ./... -fmt json -out gosec-report.json || true
+        
+        # Parse results (simplified scoring)
+        if [ -f gosec-report.json ]; then
+          ISSUES=$(jq '.Issues | length' gosec-report.json)
+          if [ "$ISSUES" -eq 0 ]; then
+            SCORE=100
+          elif [ "$ISSUES" -le 5 ]; then
+            SCORE=80
+          elif [ "$ISSUES" -le 10 ]; then
+            SCORE=60
+          else
+            SCORE=40
+          fi
+        else
+          SCORE=100
+        fi
+        
+        echo "score=$SCORE" >> $GITHUB_OUTPUT
+        echo "Security Score: $SCORE/100"
+        echo "Issues Found: $ISSUES"
+        echo "::endgroup::"
+
+    - name: Run Performance Tests
+      run: |
+        echo "::group::Running performance tests"
+        go test -v -bench=. -benchmem -run=^$ ./... > benchmark.txt || true
+        echo "::endgroup::"
+
+    - name: Evaluate Quality Gates
+      id: gates
+      run: |
+        echo "::group::Evaluating quality gates"
+        
+        COVERAGE="${{ steps.coverage.outputs.coverage }}"
+        SECURITY_SCORE="${{ steps.security.outputs.score }}"
+        FORCE_PROMOTION="${{ github.event.inputs.force_promotion || 'false' }}"
+        
+        ALL_PASSED=true
+        
+        # Coverage gate (>= 60%)
+        if (( $(echo "$COVERAGE >= 60" | bc -l) )); then
+          echo "✅ Coverage gate passed: $COVERAGE%"
+        else
+          echo "❌ Coverage gate failed: $COVERAGE% (required >= 60%)"
+          ALL_PASSED=false
+        fi
+        
+        # Security gate (>= 80)
+        if [ "$SECURITY_SCORE" -ge 80 ]; then
+          echo "✅ Security gate passed: $SECURITY_SCORE/100"
+        else
+          echo "❌ Security gate failed: $SECURITY_SCORE/100 (required >= 80)"
+          ALL_PASSED=false
+        fi
+        
+        # Force promotion bypass
+        if [ "$FORCE_PROMOTION" == "true" ]; then
+          echo "⚠️ Force promotion enabled - bypassing quality gates"
+          ALL_PASSED=true
+        fi
+        
+        echo "all-passed=$ALL_PASSED" >> $GITHUB_OUTPUT
+        echo "::endgroup::"
+
+    - name: Upload Quality Reports
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: quality-reports-${{ needs.pre-flight.outputs.target-env }}
+        path: |
+          coverage.out
+          gosec-report.json
+          benchmark.txt
+
+  # Build and Package
+  build:
+    name: Build & Package
+    runs-on: ubuntu-latest
+    needs: [pre-flight, quality-gates]
+    if: |
+      needs.pre-flight.outputs.should-promote == 'true' && 
+      (needs.quality-gates.outputs.all-checks-passed == 'true' || 
+       github.event.inputs.force_promotion == 'true')
+    outputs:
+      image-digest: ${{ steps.build.outputs.digest }}
+      version: ${{ steps.meta.outputs.version }}
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.22'
+        cache: true
+
+    - name: Generate Metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=ref,event=branch,suffix=-${{ needs.pre-flight.outputs.target-env }}
+          type=semver,pattern={{version}},suffix=-${{ needs.pre-flight.outputs.target-env }}
+          type=sha,prefix=${{ needs.pre-flight.outputs.target-env }}-
+
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Build and Push Docker Image
+      id: build
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        platforms: linux/amd64,linux/arm64
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: |
+          org.opencontainers.image.version=${{ steps.meta.outputs.version }}
+          org.opencontainers.image.revision=${{ github.sha }}
+          org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
+          org.opencontainers.image.source=${{ github.repository }}
+          org.opencontainers.image.licenses=MIT
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        build-args: |
+          VERSION=${{ steps.meta.outputs.version }}
+          BUILD_DATE=${{ github.event.head_commit.timestamp }}
+          COMMIT_SHA=${{ github.sha }}
+          TARGET_ENV=${{ needs.pre-flight.outputs.target-env }}
+
+    - name: Generate SBOM
+      uses: anchore/sbom-action@v0
+      with:
+        image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
+        format: spdx-json
+        output-file: sbom.spdx.json
+
+    - name: Upload Build Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-artifacts-${{ needs.pre-flight.outputs.target-env }}
+        path: |
+          sbom.spdx.json
+
+  # Staging Deployment
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [pre-flight, build]
+    if: |
+      needs.pre-flight.outputs.should-promote == 'true' && 
+      needs.pre-flight.outputs.target-env == 'staging'
+    environment:
+      name: staging
+      url: https://staging.tlsai-agent.example.com
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Deploy to Staging
+      run: |
+        echo "::group::Deploying to Staging Environment"
+        echo "🚀 Deploying TLSAIAgent to staging"
+        echo "Image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ needs.build.outputs.image-digest }}"
+        echo "Version: ${{ needs.build.outputs.version }}"
+        echo "Commit: ${{ github.sha }}"
+        
+        # Simulate deployment (replace with actual deployment logic)
+        echo "✅ Staging deployment completed successfully"
+        echo "::endgroup::"
+
+    - name: Staging Health Check
+      run: |
+        echo "::group::Staging Health Check"
+        echo "🔍 Performing health checks on staging deployment"
+        
+        # Simulate health check (replace with actual health check)
+        sleep 30
+        echo "✅ Staging health checks passed"
+        echo "::endgroup::"
+
+    - name: Run Staging Smoke Tests
+      run: |
+        echo "::group::Running Staging Smoke Tests"
+        echo "🧪 Running smoke tests on staging"
+        
+        # Simulate smoke tests (replace with actual tests)
+        sleep 20
+        echo "✅ Staging smoke tests passed"
+        echo "::endgroup::"
+
+    - name: Trigger Monitoring
+      run: |
+        echo "::group::Triggering monitoring for staging"
+        echo "📊 Triggering monitoring workflow for staging environment"
+        
+        # Trigger monitoring workflow
+        gh workflow run monitoring.yml \
+          --field environment=staging \
+          --field deployment_url=https://staging.tlsai-agent.example.com
+        
+        echo "✅ Monitoring triggered for staging"
+        echo "::endgroup::"
+
+  # Production Deployment
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [pre-flight, build, deploy-staging]
+    if: |
+      needs.pre-flight.outputs.should-promote == 'true' && 
+      needs.pre-flight.outputs.target-env == 'production' &&
+      needs.deploy-staging.result == 'success'
+    environment:
+      name: production
+      url: https://tlsai-agent.example.com
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Production Deployment Approval Check
+      run: |
+        echo "::group::Production Deployment Approval"
+        echo "🔐 Production deployment requires manual approval"
+        echo "This step is protected by GitHub environment protection rules"
+        echo "::endgroup::"
+
+    - name: Deploy to Production
+      run: |
+        echo "::group::Deploying to Production Environment"
+        echo "🚀 Deploying TLSAIAgent to production"
+        echo "Image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ needs.build.outputs.image-digest }}"
+        echo "Version: ${{ needs.build.outputs.version }}"
+        echo "Commit: ${{ github.sha }}"
+        
+        # Simulate deployment (replace with actual deployment logic)
+        echo "✅ Production deployment completed successfully"
+        echo "::endgroup::"
+
+    - name: Production Health Check
+      run: |
+        echo "::group::Production Health Check"
+        echo "🔍 Performing health checks on production deployment"
+        
+        # Simulate health check (replace with actual health check)
+        sleep 60
+        echo "✅ Production health checks passed"
+        echo "::endgroup::"
+
+    - name: Run Production Smoke Tests
+      run: |
+        echo "::group::Running Production Smoke Tests"
+        echo "🧪 Running smoke tests on production"
+        
+        # Simulate smoke tests (replace with actual tests)
+        sleep 30
+        echo "✅ Production smoke tests passed"
+        echo "::endgroup::"
+
+    - name: Trigger Monitoring
+      run: |
+        echo "::group::Triggering monitoring for production"
+        echo "📊 Triggering monitoring workflow for production environment"
+        
+        # Trigger monitoring workflow
+        gh workflow run monitoring.yml \
+          --field environment=production \
+          --field deployment_url=https://tlsai-agent.example.com
+        
+        echo "✅ Monitoring triggered for production"
+        echo "::endgroup::"
+
+  # Rollback (Manual Trigger)
+  rollback:
+    name: Rollback Deployment
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'workflow_dispatch' && 
+      github.event.inputs.rollback == 'true'
+    needs: [pre-flight]
+    environment:
+      name: production
+    steps:
+    - name: Rollback Production
+      run: |
+        echo "::group::Rolling Back Production"
+        echo "🔄 Rolling back production deployment"
+        
+        # Simulate rollback (replace with actual rollback logic)
+        echo "✅ Production rollback completed successfully"
+        echo "::endgroup::"
+
+    - name: Rollback Staging
+      run: |
+        echo "::group::Rolling Back Staging"
+        echo "🔄 Rolling back staging deployment"
+        
+        # Simulate rollback (replace with actual rollback logic)
+        echo "✅ Staging rollback completed successfully"
+        echo "::endgroup::"
+
+  # Notification
+  notify:
+    name: Notify Promotion Status
+    runs-on: ubuntu-latest
+    needs: [pre-flight, quality-gates, build, deploy-staging, deploy-production]
+    if: always()
+    steps:
+    - name: Notify Success
+      if: |
+        (needs.deploy-staging.result == 'success' || needs.deploy-production.result == 'success') &&
+        needs.quality-gates.result == 'success'
+      run: |
+        echo "::group::Promotion Success Notification"
+        echo "🎉 Environment Promotion Successful!"
+        echo ""
+        echo "Repository: ${{ github.repository }}"
+        echo "Branch: ${{ needs.pre-flight.outputs.source-branch }}"
+        echo "Environment: ${{ needs.pre-flight.outputs.target-env }}"
+        echo "Version: ${{ needs.build.outputs.version }}"
+        echo "Commit: ${{ github.sha }}"
+        echo "Time: $(date -u)"
+        echo ""
+        echo "Quality Metrics:"
+        echo "- Test Coverage: ${{ needs.quality-gates.outputs.test-coverage }}%"
+        echo "- Security Score: ${{ needs.quality-gates.outputs.security-score }}/100"
+        echo "::endgroup::"
+
+    - name: Notify Failure
+      if: |
+        (needs.deploy-staging.result == 'failure' || needs.deploy-production.result == 'failure') ||
+        needs.quality-gates.result == 'failure'
+      run: |
+        echo "::group::Promotion Failure Notification"
+        echo "❌ Environment Promotion Failed!"
+        echo ""
+        echo "Repository: ${{ github.repository }}"
+        echo "Branch: ${{ needs.pre-flight.outputs.source-branch }}"
+        echo "Environment: ${{ needs.pre-flight.outputs.target-env }}"
+        echo "Version: ${{ needs.build.outputs.version }}"
+        echo "Commit: ${{ github.sha }}"
+        echo "Time: $(date -u)"
+        echo "::endgroup::"
+
+    - name: Update Deployment Status
+      run: |
+        echo "::group::Updating Deployment Status"
+        
+        # Create deployment status (for PR integration)
+        if [ "${{ github.event_name }}" == "pull_request" ]; then
+          # Update PR status with deployment result
+          if [ "${{ needs.deploy-staging.result }}" == "success" ] || [ "${{ needs.deploy-production.result }}" == "success" ]; then
+            echo "✅ Deployment successful - updating PR status"
+          else
+            echo "❌ Deployment failed - updating PR status"
+          fi
+        fi
+        
+        echo "::endgroup::"

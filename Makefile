@@ -33,8 +33,23 @@ help:
 	@echo ""
 	@echo "Development:"
 	@echo "  make run                Run the TLS Agent"
-	@echo "  make clean              Clean build artifacts"
+	@echo "  make dev               Start development environment"
+	@echo "  make dev-stop           Stop development environment"
+	@echo "  make dev-logs           Show development logs"
+	@echo "  make dev-restart        Restart development environment"
 	@echo ""
+	@echo "Environment Promotion:"
+	@echo "  make promote-dev       Promote to development environment"
+	@echo "  make promote-staging    Promote to staging environment"
+	@echo "  make promote-prod      Promote to production environment"
+	@echo "  make promote ENV=env   Promote to specific environment"
+	@echo ""
+	@echo "Environment Management:"
+	@echo "  make env-dev           Load development environment variables"
+	@echo "  make env-staging        Load staging environment variables"
+	@echo "  make env-prod          Load production environment variables"
+	@echo ""
+	@echo "Cleanup:"
 
 # Build targets
 build:
@@ -163,10 +178,67 @@ uninstall-hooks:
 	@pre-commit uninstall
 	@pre-commit uninstall --hook-type commit-msg
 
-# Development targets
+# Run targets
 run:
-	@echo "🚀 Running TLS Agent..."
+	@echo "🚀 Starting TLS Agent..."
 	@go run main.go
+
+# Development environment targets
+dev:
+	@echo "🔧 Starting development environment..."
+	@docker-compose -f docker-compose.dev.yml up -d
+	@echo "✅ Development environment started"
+	@echo "📊 Grafana: http://localhost:3000 (admin/admin123)"
+	@echo "🔍 Agent: https://localhost:8443"
+
+dev-stop:
+	@echo "🛑 Stopping development environment..."
+	@docker-compose -f docker-compose.dev.yml down
+	@echo "✅ Development environment stopped"
+
+dev-logs:
+	@docker-compose -f docker-compose.dev.yml logs -f
+
+dev-restart:
+	@echo "🔄 Restarting development environment..."
+	@make dev-stop
+	@sleep 2
+	@make dev
+
+# Environment promotion targets
+promote-dev:
+	@echo "🚀 Promoting to development environment..."
+	@./scripts/promote.sh development
+
+promote-staging:
+	@echo "🚀 Promoting to staging environment..."
+	@./scripts/promote.sh staging
+
+promote-prod:
+	@echo "🚀 Promoting to production environment..."
+	@./scripts/promote.sh production
+
+promote:
+	@if [ -z "$(ENV)" ]; then \
+		echo "❌ Environment is required. Usage: make promote ENV=development|staging|production"; \
+		exit 1; \
+	fi
+	@echo "🚀 Promoting to $(ENV) environment..."
+	@./scripts/promote.sh $(ENV)
+
+# Environment management targets
+env-dev:
+	@echo "🔧 Loading development environment variables..."
+	@export $(cat .env.dev | xargs) && echo "✅ Development environment loaded"
+
+env-staging:
+	@echo "🔧 Loading staging environment variables..."
+	@export $(cat .env.staging | xargs) && echo "✅ Staging environment loaded"
+
+env-prod:
+	@echo "🔧 Loading production environment variables..."
+	@echo "⚠️  Production environment requires secure configuration"
+	@export $(cat .env.production | xargs) && echo "✅ Production environment loaded"
 
 clean:
 	@echo "🧹 Cleaning build artifacts..."
