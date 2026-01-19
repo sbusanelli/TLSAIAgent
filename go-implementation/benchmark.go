@@ -3,10 +3,9 @@ package main
 import (
 	"fmt"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
-	"os"
-	"strconv"
 )
 
 type BenchmarkResult struct {
@@ -75,7 +74,7 @@ func runGoroutineBenchmark(taskCount int) BenchmarkResult {
 func printResults(results []BenchmarkResult) {
 	fmt.Println("\n=== GOROUTINE BENCHMARK RESULTS ===")
 	fmt.Printf("%-20s %-10s %-15s %-15s\n", "Implementation", "Tasks", "Time", "Throughput")
-	fmt.Println("-".repeat(60))
+	fmt.Println(strings.Repeat("-", 60))
 
 	for _, result := range results {
 		fmt.Printf("%-20s %-10d %-15v %-15.2f\n", 
@@ -86,7 +85,8 @@ func printResults(results []BenchmarkResult) {
 
 func runGoroutineComparison(taskCounts []int) {
 	fmt.Println("=== Go Goroutines Performance Test ===")
-	fmt.Println("Testing Goroutines performance with I/O-bound tasks\n")
+	fmt.Println("Testing Goroutines performance with I/O-bound tasks")
+	fmt.Println()
 
 	var results []BenchmarkResult
 

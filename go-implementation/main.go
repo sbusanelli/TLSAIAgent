@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	app := cli.NewApp(&cli.App{
+	app := &cli.App{
 		Name:  "virtual-threads-benchmark",
 		Usage: "Performance comparison between Go Goroutines and Java Virtual Threads",
 		Flags: []cli.Flag{
@@ -36,22 +36,22 @@ func main() {
 				taskCounts = []int{c.Int("tasks")}
 			}
 
-			fmt.Println("🚀 Virtual Threads vs Goroutines Benchmark")
-			fmt.Println("=====================================")
-			fmt.Printf("Configuration: %d tasks max, %s duration per task\n\n", 
-				c.Int("tasks"), c.String("duration"))
+			fmt.Println("🚀 Kicking off the Go Goroutine Benchmark...")
+			fmt.Println("------------------------------------------")
+			fmt.Printf("⚙️  Configuration: %d tasks, %s duration, %d workers\n\n",
+				c.Int("tasks"), c.String("duration"), c.Int("workers"))
 
 			// Run Go goroutine benchmarks
 			runGoroutineComparison(taskCounts)
 
-			fmt.Println("\n📊 Benchmark completed!")
-			fmt.Println("Run the Java implementation to compare results:")
-			fmt.Println("  cd ../java-implementation")
-			fmt.Println("  mvn exec:java -Dexec.mainClass=\"com.benchmark.ComparisonRunner\"")
+			fmt.Println("\n✅ Go Goroutine benchmark complete!")
+			fmt.Println("-----------------------------------")
+			fmt.Println("\nNext, compare with Java Virtual Threads:")
+			fmt.Println("  cd ../java-implementation && mvn exec:java -Dexec.mainClass=\"com.benchmark.ComparisonRunner\"")
 
 			return nil
 		},
-	})
+	}
 
 	if err := app.Run(os.Args); err != nil {
 		log.Fatal(err)
