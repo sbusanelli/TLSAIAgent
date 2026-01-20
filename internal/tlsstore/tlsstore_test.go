@@ -28,7 +28,7 @@ func TestLoad(t *testing.T) {
 	}
 
 	// Test certificate properties
-	if len(cert.Certificate.Raw) == 0 {
+	if len(cert.Certificate) == 0 {
 		t.Error("Certificate raw bytes should not be empty")
 	}
 
@@ -36,7 +36,7 @@ func TestLoad(t *testing.T) {
 		t.Error("Certificate should be valid")
 	}
 
-	if cert.PrivateKey.D != 0 {
+	if cert.PrivateKey != 0 {
 		t.Error("Private key should not be zero")
 	}
 }
@@ -87,7 +87,7 @@ func TestLoadMismatchedFiles(t *testing.T) {
 MIIDdzCCAn+gAwIBAgI...
 -----END CERTIFICATE-----`
 
-	testKey := `-----BEGIN PRIVATE KEY-----
+	// testKey := `-----BEGIN PRIVATE KEY-----
 MIIEvQIBADANBgkqhkiG9w0BAQ...
 -----END PRIVATE KEY-----`
 
@@ -128,7 +128,7 @@ func TestNew(t *testing.T) {
 	}
 
 	// Test GetCertificate method
-	retrievedCert := store.GetCertificate()
+	retrievedCert := store.GetCertificate(&tls.ClientHelloInfo{})
 	if retrievedCert == nil {
 		t.Error("Retrieved certificate should not be nil")
 	}
@@ -149,7 +149,7 @@ func TestGetCertificateWithValidFiles(t *testing.T) {
 
 	// Test multiple retrievals
 	for i := 0; i < 10; i++ {
-		retrievedCert := store.GetCertificate()
+		retrievedCert := store.GetCertificate(&tls.ClientHelloInfo{})
 		if retrievedCert == nil {
 			t.Errorf("Retrieved certificate should not be nil (iteration %d)", i)
 		}
@@ -165,7 +165,7 @@ func TestGetCertificateWithNilStore(t *testing.T) {
 	var store *CertificateStore
 
 	// Test with nil store
-	retrievedCert := store.GetCertificate()
+	retrievedCert := store.GetCertificate(&tls.ClientHelloInfo{})
 	if retrievedCert != nil {
 		t.Error("Retrieved certificate should be nil for nil store")
 	}
@@ -184,7 +184,7 @@ func TestGetCertificateConcurrentAccess(t *testing.T) {
 	done := make(chan bool, 10)
 	for i := 0; i < 10; i++ {
 		go func(id int) {
-			retrievedCert := store.GetCertificate()
+			retrievedCert := store.GetCertificate(&tls.ClientHelloInfo{})
 			if retrievedCert == nil {
 				t.Errorf("Retrieved certificate should not be nil (goroutine %d)", id)
 			}
@@ -233,7 +233,7 @@ func TestCertificateValidation(t *testing.T) {
 		t.Error("Private key should not be nil")
 	}
 
-	if cert.PrivateKey.D == 0 {
+	if cert.PrivateKey == 0 {
 		t.Error("Private key should not be zero")
 	}
 }
@@ -455,7 +455,7 @@ func TestCertificateReload(t *testing.T) {
 	store2 := New(cert2)
 
 	// Verify both stores have the same certificate
-	if store.GetCertificate() != store2.GetCertificate() {
+	if store.GetCertificate(&tls.ClientHelloInfo{}) != store2.GetCertificate() {
 		t.Error("Reloaded certificate should match original")
 	}
 }
@@ -476,7 +476,7 @@ func TestCertificateMemoryUsage(t *testing.T) {
 
 	// Test all stores can retrieve certificates
 	for i, store := range stores {
-		retrievedCert := store.GetCertificate()
+		retrievedCert := store.GetCertificate(&tls.ClientHelloInfo{})
 		if retrievedCert == nil {
 			t.Errorf("Store %d should have valid certificate", i)
 		}
@@ -499,7 +499,7 @@ func TestCertificateThreadSafety(t *testing.T) {
 	done := make(chan bool, 50)
 	for i := 0; i < 50; i++ {
 		go func(id int) {
-			retrievedCert := store.GetCertificate()
+			retrievedCert := store.GetCertificate(&tls.ClientHelloInfo{})
 			if retrievedCert == nil {
 				t.Errorf("Thread %d: Retrieved certificate should not be nil", id)
 			}
@@ -548,6 +548,6 @@ func BenchmarkGetCertificate(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		store.GetCertificate()
+		store.GetCertificate(&tls.ClientHelloInfo{})
 	}
 }
