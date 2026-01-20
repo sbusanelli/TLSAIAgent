@@ -121,26 +121,26 @@ print_status() {
 # Function to check prerequisites
 check_prerequisites() {
     print_status "INFO" "Checking prerequisites..."
-    
+
     # Check if Docker is running
     if ! docker info > /dev/null 2>&1; then
         print_status "ERROR" "Docker is not running or not accessible"
         exit 1
     fi
-    
+
     # Check if docker-compose is available
     if ! command -v docker-compose &> /dev/null; then
         print_status "ERROR" "docker-compose is not installed"
         exit 1
     fi
-    
+
     # Check if required files exist
     local compose_file="docker-compose.${ENVIRONMENT}.yml"
     if [[ ! -f "$compose_file" ]]; then
         print_status "ERROR" "Compose file not found: $compose_file"
         exit 1
     fi
-    
+
     # Check environment-specific requirements
     case $ENVIRONMENT in
         "staging")
@@ -156,7 +156,7 @@ check_prerequisites() {
             fi
             ;;
     esac
-    
+
     print_status "SUCCESS" "Prerequisites check passed"
 }
 
@@ -166,9 +166,9 @@ run_quality_gates() {
         print_status "WARNING" "Skipping quality gates due to --skip-tests flag"
         return 0
     fi
-    
+
     print_status "INFO" "Running quality gates..."
-    
+
     # Run pre-commit hooks
     print_status "INFO" "Running pre-commit hooks..."
     if ! pre-commit run --all-files; then
@@ -179,7 +179,7 @@ run_quality_gates() {
             print_status "WARNING" "Pre-commit hooks failed, but proceeding due to --force flag"
         fi
     fi
-    
+
     # Run unit tests
     print_status "INFO" "Running unit tests..."
     if ! go test -v -race -coverprofile=coverage.out ./...; then
@@ -190,12 +190,12 @@ run_quality_gates() {
             print_status "WARNING" "Unit tests failed, but proceeding due to --force flag"
         fi
     fi
-    
+
     # Check coverage
     if [[ -f "coverage.out" ]]; then
         COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
         print_status "INFO" "Test coverage: ${COVERAGE}%"
-        
+
         if (( $(echo "$COVERAGE < 60" | bc -l) )); then
             if [[ "$FORCE" != "true" ]]; then
                 print_status "ERROR" "Coverage below 60%. Use --force to bypass."
@@ -205,7 +205,7 @@ run_quality_gates() {
             fi
         fi
     fi
-    
+
     # Run security scan
     print_status "INFO" "Running security scan..."
     if command -v gosec &> /dev/null; then
@@ -220,74 +220,74 @@ run_quality_gates() {
     else
         print_status "WARNING" "gosec not found, skipping security scan"
     fi
-    
+
     print_status "SUCCESS" "Quality gates passed"
 }
 
 # Function to build Docker image
 build_image() {
     print_status "INFO" "Building Docker image..."
-    
+
     local image_tag="${VERSION:-latest}"
     local full_image="${DOCKER_REGISTRY}/${IMAGE_NAME}:${image_tag}"
-    
+
     if [[ "$DRY_RUN" == "true" ]]; then
         print_status "INFO" "DRY RUN: Would build image $full_image"
         return 0
     fi
-    
+
     # Build the image
     if ! docker build -t "$full_image" .; then
         print_status "ERROR" "Docker build failed"
         exit 1
     fi
-    
+
     print_status "SUCCESS" "Docker image built: $full_image"
 }
 
 # Function to deploy to environment
 deploy_environment() {
     local compose_file="docker-compose.${ENVIRONMENT}.yml"
-    
+
     print_status "INFO" "Deploying to $ENVIRONMENT environment..."
-    
+
     if [[ "$DRY_RUN" == "true" ]]; then
         print_status "INFO" "DRY RUN: Would deploy using $compose_file"
         return 0
     fi
-    
+
     # Set environment variables
     export VERSION="${VERSION:-latest}"
     export BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
     export COMMIT_SHA="$(git rev-parse HEAD)"
-    
+
     # Deploy using docker-compose
     if ! docker-compose -f "$compose_file" up -d; then
         print_status "ERROR" "Deployment to $ENVIRONMENT failed"
         exit 1
     fi
-    
+
     print_status "SUCCESS" "Deployed to $ENVIRONMENT environment"
 }
 
 # Function to run health checks
 run_health_checks() {
     print_status "INFO" "Running health checks..."
-    
+
     if [[ "$DRY_RUN" == "true" ]]; then
         print_status "INFO" "DRY RUN: Would run health checks"
         return 0
     fi
-    
+
     # Wait for services to start
     sleep 30
-    
+
     # Check if main service is healthy
     local container_name="tlsai-agent-${ENVIRONMENT}"
     if [[ "$ENVIRONMENT" == "development" ]]; then
         container_name="tlsai-agent-dev"
     fi
-    
+
     if docker ps --filter "name=$container_name" --filter "status=running" | grep -q .; then
         print_status "SUCCESS" "Service $container_name is running"
     else
@@ -295,16 +295,16 @@ run_health_checks() {
         docker logs "$container_name" --tail 50
         exit 1
     fi
-    
+
     # Check health endpoint
     local health_url="https://localhost:8443/health"
     if [[ "$ENVIRONMENT" == "development" ]]; then
         health_url="https://localhost:8443/health"
     fi
-    
+
     # Wait a bit more for health endpoint
     sleep 10
-    
+
     if curl -f -k -s "$health_url" > /dev/null; then
         print_status "SUCCESS" "Health check passed for $ENVIRONMENT"
     else
@@ -329,27 +329,27 @@ show_summary() {
 # Main execution
 main() {
     print_status "INFO" "Starting environment promotion to $ENVIRONMENT"
-    
+
     # Check prerequisites
     check_prerequisites
-    
+
     # Run quality gates
     run_quality_gates
-    
+
     # Build image
     build_image
-    
+
     # Deploy environment
     deploy_environment
-    
+
     # Run health checks
     run_health_checks
-    
+
     # Show summary
     show_summary
-    
+
     print_status "SUCCESS" "Environment promotion to $ENVIRONMENT completed successfully!"
-    
+
     if [[ "$ENVIRONMENT" == "staging" ]]; then
         print_status "INFO" "Next step: Promote to production with: ./scripts/promote.sh production"
     fi

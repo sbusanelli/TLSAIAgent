@@ -63,7 +63,7 @@ services:
     ports:
       - "6379:6379"
     environment:
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-dev123}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
       - REDIS_MAXMEMORY=256mb
       - REDIS_MAXMEMORY_POLICY=allkeys-lru
     volumes:
@@ -81,7 +81,7 @@ services:
     environment:
       - POSTGRES_DB=${POSTGRES_DB:-tlsai_agent_dev}
       - POSTGRES_USER=${POSTGRES_USER:-tlsai_dev}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-dev123}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     volumes:
       - postgres-dev-data:/var/lib/postgresql/data
     networks:

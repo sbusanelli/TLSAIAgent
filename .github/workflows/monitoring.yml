@@ -9,6 +9,20 @@ on:
     # Run monitoring checks every hour
     - cron: '0 * * * *'
   workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to monitor'
+        required: false
+        default: 'staging'
+        type: choice
+        options:
+        - staging
+        - production
+        - development
+      deployment_url:
+        description: 'Deployment URL to monitor'
+        required: false
+        type: string
 
 env:
   GO_VERSION: '1.22'

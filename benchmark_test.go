@@ -171,7 +171,7 @@ func BenchmarkCertificateRetrieval(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		store.GetCertificate()
+		store.GetCertificate(&tls.ClientHelloInfo{})
 	}
 
 	// Clean up

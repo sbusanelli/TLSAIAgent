@@ -65,7 +65,7 @@ services:
     ports:
       - "6379:6379"
     environment:
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-staging123}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
       - REDIS_MAXMEMORY=512mb
       - REDIS_MAXMEMORY_POLICY=allkeys-lru
     volumes:
@@ -83,7 +83,7 @@ services:
     environment:
       - POSTGRES_DB=${POSTGRES_DB:-tlsai_agent_staging}
       - POSTGRES_USER=${POSTGRES_USER:-tlsai_staging}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-staging123}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     volumes:
       - postgres-staging-data:/var/lib/postgresql/data
     networks:
@@ -116,7 +116,7 @@ services:
       - "3000:3000"
     environment:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-staging123}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
       - GF_SERVER_ROOT_URL=http://localhost:3000
     volumes:
       - grafana-staging-data:/var/lib/grafana

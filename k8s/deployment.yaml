@@ -210,7 +210,6 @@ spec:
       dnsPolicy: ClusterFirst
       schedulerName: default-scheduler
 
----
 apiVersion: v1
 kind: Service
 metadata:
@@ -243,7 +242,6 @@ spec:
     app.kubernetes.io/name: tlsai-agent
     app.kubernetes.io/component: application
 
----
 apiVersion: v1
 kind: Service
 metadata:
@@ -277,7 +275,6 @@ spec:
     app.kubernetes.io/name: tlsai-agent
     app.kubernetes.io/component: application
 
----
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -293,7 +290,6 @@ metadata:
     contact: "sbusanelli@example.com"
 automountServiceAccountToken: true
 
----
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -324,7 +320,6 @@ rules:
   resources: ["events"]
   verbs: ["create", "patch"]
 
----
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
@@ -347,7 +342,6 @@ roleRef:
   name: tlsai-agent
   apiGroup: rbac.authorization.k8s.io
 
----
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -386,7 +380,7 @@ data:
             - "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"
             - "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384"
             - "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305"
-    
+
     logging:
       level: "info"
       format: "json"
@@ -397,14 +391,14 @@ data:
         max_backups: 10
         max_age: 30
         compress: true
-    
+
     metrics:
       enabled: true
       port: 9090
       path: "/metrics"
       namespace: "tlsai_agent"
       subsystem: "agent"
-    
+
     vault:
       address: "https://vault:8200"
       role: "tlsai-agent"
@@ -413,19 +407,19 @@ data:
       retry:
         attempts: 3
         backoff: "1s"
-    
+
     features:
       auto_renewal: true
       monitoring: true
       health_check: true
       graceful_shutdown: true
-    
+
     security:
       enable_tls: true
       verify_peer: true
       client_auth: "require"
       session_timeout: "1h"
-    
+
     performance:
       max_connections: 1000
       connection_timeout: "30s"
@@ -433,7 +427,6 @@ data:
       write_timeout: "30s"
       idle_timeout: "60s"
 
----
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -456,7 +449,6 @@ spec:
   storageClassName: fast-ssd
   volumeMode: Filesystem
 
----
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -479,7 +471,6 @@ spec:
   storageClassName: fast-ssd
   volumeMode: Filesystem
 
----
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
@@ -500,7 +491,6 @@ spec:
       app.kubernetes.io/name: tlsai-agent
       app.kubernetes.io/component: application
 
----
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:

@@ -7,13 +7,13 @@
   <version>1.0.0</version>
   <name>Virtual Threads Benchmark</name>
   <description>Performance comparison between Java Virtual Threads and Traditional Threads</description>
-  
+
   <properties>
     <maven.compiler.source>21</maven.compiler.source>
     <maven.compiler.target>21</maven.compiler.target>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
   </properties>
-  
+
   <dependencies>
     <dependency>
       <groupId>org.junit.jupiter</groupId>
@@ -28,7 +28,7 @@
       <scope>test</scope>
     </dependency>
   </dependencies>
-  
+
   <build>
     <plugins>
       <plugin>
@@ -40,7 +40,7 @@
           <target>21</target>
         </configuration>
       </plugin>
-      
+
       <plugin>
         <groupId>org.codehaus.mojo</groupId>
         <artifactId>exec-maven-plugin</artifactId>

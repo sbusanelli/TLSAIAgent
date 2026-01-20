@@ -6,7 +6,7 @@ A comprehensive performance comparison between Java Virtual Threads and Go Gorou
 
 This project demonstrates and benchmarks the performance characteristics of:
 - **Java Virtual Threads** (Java 21+)
-- **Java Traditional Threads** 
+- **Java Traditional Threads**
 - **Go Goroutines**
 
 Perfect for understanding concurrency patterns and performance trade-offs in modern programming languages.
@@ -65,7 +65,7 @@ mvn clean compile
 # Run Virtual Threads benchmark
 mvn exec:java -Dexec.mainClass="com.benchmark.VirtualThreadsBenchmark"
 
-# Run Traditional Threads benchmark  
+# Run Traditional Threads benchmark
 mvn exec:java -Dexec.mainClass="com.benchmark.TraditionalThreadsBenchmark"
 
 # Run comprehensive comparison

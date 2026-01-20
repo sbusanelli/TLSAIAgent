@@ -592,7 +592,7 @@ func TestIntegrationPerformance(t *testing.T) {
 	duration := time.Since(startTime)
 	avgDuration := duration / time.Duration(iterations*4)
 
-	t.Logf("Integration performance test: %d iterations in %v (avg: %v per operation)", 
+	t.Logf("Integration performance test: %d iterations in %v (avg: %v per operation)",
 		iterations, duration, avgDuration)
 
 	// Performance threshold

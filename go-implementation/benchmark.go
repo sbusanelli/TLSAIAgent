@@ -2,23 +2,23 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"runtime"
+	"strconv"
 	"sync"
 	"time"
-	"os"
-	"strconv"
 )
 
 type BenchmarkResult struct {
 	Implementation string
-	TaskCount     int
-	ExecutionTime time.Duration
-	MemoryUsed   int64
-	Throughput   float64
+	TaskCount      int
+	ExecutionTime  time.Duration
+	MemoryUsed     int64
+	Throughput     float64
 }
 
 func (br BenchmarkResult) String() string {
-	return fmt.Sprintf("%s: %d tasks in %v (%.2f tasks/sec, %d MB memory)", 
+	return fmt.Sprintf("%s: %d tasks in %v (%.2f tasks/sec, %d MB memory)",
 		br.Implementation, br.TaskCount, br.ExecutionTime, br.Throughput, br.MemoryUsed)
 }
 
@@ -65,10 +65,10 @@ func runGoroutineBenchmark(taskCount int) BenchmarkResult {
 
 	return BenchmarkResult{
 		Implementation: "Go Goroutines",
-		TaskCount:     taskCount,
-		ExecutionTime: executionTime,
-		MemoryUsed:   memoryUsed,
-		Throughput:   throughput,
+		TaskCount:      taskCount,
+		ExecutionTime:  executionTime,
+		MemoryUsed:     memoryUsed,
+		Throughput:     throughput,
 	}
 }
 
@@ -78,7 +78,7 @@ func printResults(results []BenchmarkResult) {
 	fmt.Println("-".repeat(60))
 
 	for _, result := range results {
-		fmt.Printf("%-20s %-10d %-15v %-15.2f\n", 
+		fmt.Printf("%-20s %-10d %-15v %-15.2f\n",
 			result.Implementation, result.TaskCount, result.ExecutionTime, result.Throughput)
 	}
 	fmt.Println()
@@ -109,8 +109,8 @@ func runGoroutineComparison(taskCounts []int) {
 			prevResult := results[i-1]
 			scalability := float64(result.TaskCount) / float64(prevResult.TaskCount)
 			timeIncrease := result.ExecutionTime.Seconds() / prevResult.ExecutionTime.Seconds()
-			
-			fmt.Printf("Task count increased %.1fx, execution time increased %.2fx\n", 
+
+			fmt.Printf("Task count increased %.1fx, execution time increased %.2fx\n",
 				scalability, timeIncrease)
 		}
 	}

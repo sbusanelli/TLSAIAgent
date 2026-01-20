@@ -148,7 +148,7 @@ func TestGetCertificateWithValidFiles(t *testing.T) {
 	store := New(cert)
 
 	// Test multiple retrievals
-	for i := 0; < 10; i++ {
+	for i := 0; i < 10; i++ {
 		retrievedCert := store.GetCertificate()
 		if retrievedCert == nil {
 			t.Errorf("Retrieved certificate should not be nil (iteration %d)", i)

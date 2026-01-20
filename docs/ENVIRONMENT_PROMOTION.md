@@ -144,7 +144,7 @@ make promote ENV=staging
 Each environment has its own configuration file:
 
 - `.env.dev` - Development settings
-- `.env.staging` - Staging settings  
+- `.env.staging` - Staging settings
 - `.env.production` - Production settings (secrets required)
 
 ### Docker Compose Files
@@ -159,7 +159,7 @@ Each environment has its own configuration file:
 # Load development environment
 make env-dev
 
-# Load staging environment  
+# Load staging environment
 make env-staging
 
 # Load production environment (requires secrets)

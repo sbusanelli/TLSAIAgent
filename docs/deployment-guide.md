@@ -368,7 +368,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Deploy to Kubernetes
       run: |
         kubectl apply -f k8s/

@@ -17,7 +17,7 @@ Thread.sleep(50); // 50ms simulated I/O latency
 ```
 
 ```go
-// Go Implementation  
+// Go Implementation
 time.Sleep(50 * time.Millisecond) // 50ms simulated I/O latency
 ```
 
@@ -63,7 +63,7 @@ This simulates:
 Tasks      | Traditional | Virtual | Goroutines | Winner
 -----------|-------------|-----------|-------------|--------
 1,000      |    150ms    |   45ms    |    35ms    | Goroutines
-5,000      |    800ms    |   80ms    |    60ms    | Goroutines  
+5,000      |    800ms    |   80ms    |    60ms    | Goroutines
 10,000     |   2000ms    |  120ms    |    90ms    | Goroutines
 50,000     |  10000ms    |  300ms    |   200ms    | Goroutines
 100,000    |  TIMEOUT    |  500ms    |   350ms    | Goroutines

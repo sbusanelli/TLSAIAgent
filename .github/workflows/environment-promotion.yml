@@ -52,7 +52,7 @@ jobs:
       id: check
       run: |
         echo "::group::Determining promotion path"
-        
+
         # Determine source branch and target environment
         if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
           TARGET_ENV="${{ github.event.inputs.environment }}"
@@ -68,7 +68,7 @@ jobs:
           echo "should-promote=false" >> $GITHUB_OUTPUT
           exit 0
         fi
-        
+
         echo "Source Branch: $SOURCE_BRANCH"
         echo "Target Environment: $TARGET_ENV"
         echo "should-promote=true" >> $GITHUB_OUTPUT
@@ -99,13 +99,13 @@ jobs:
     - name: Run Pre-commit Hooks
       run: |
         echo "::group::Running pre-commit quality checks"
-        
+
         # Install pre-commit if not present
         pip install pre-commit
-        
+
         # Run all pre-commit hooks
         pre-commit run --all-files
-        
+
         echo "::endgroup::"
 
     - name: Run Unit Tests with Coverage
@@ -113,31 +113,31 @@ jobs:
       run: |
         echo "::group::Running unit tests with coverage"
         go test -v -race -coverprofile=coverage.out ./...
-        
+
         # Extract coverage percentage
         COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
         echo "coverage=$COVERAGE" >> $GITHUB_OUTPUT
         echo "Test Coverage: $COVERAGE%"
-        
+
         # Fail if coverage is below threshold
         if (( $(echo "$COVERAGE < 60" | bc -l) )); then
           echo "❌ Test coverage below 60% threshold"
           exit 1
         fi
-        
+
         echo "::endgroup::"
 
     - name: Run Security Scan
       id: security
       run: |
         echo "::group::Running security scan"
-        
+
         # Install gosec
         go install github.com/securego/gosec/v2/cmd/gosec@v2.18.2
-        
+
         # Run security scan
         gosec ./... -fmt json -out gosec-report.json || true
-        
+
         # Parse results (simplified scoring)
         if [ -f gosec-report.json ]; then
           ISSUES=$(jq '.Issues | length' gosec-report.json)
@@ -153,7 +153,7 @@ jobs:
         else
           SCORE=100
         fi
-        
+
         echo "score=$SCORE" >> $GITHUB_OUTPUT
         echo "Security Score: $SCORE/100"
         echo "Issues Found: $ISSUES"
@@ -169,13 +169,13 @@ jobs:
       id: gates
       run: |
         echo "::group::Evaluating quality gates"
-        
+
         COVERAGE="${{ steps.coverage.outputs.coverage }}"
         SECURITY_SCORE="${{ steps.security.outputs.score }}"
         FORCE_PROMOTION="${{ github.event.inputs.force_promotion || 'false' }}"
-        
+
         ALL_PASSED=true
-        
+
         # Coverage gate (>= 60%)
         if (( $(echo "$COVERAGE >= 60" | bc -l) )); then
           echo "✅ Coverage gate passed: $COVERAGE%"
@@ -183,7 +183,7 @@ jobs:
           echo "❌ Coverage gate failed: $COVERAGE% (required >= 60%)"
           ALL_PASSED=false
         fi
-        
+
         # Security gate (>= 80)
         if [ "$SECURITY_SCORE" -ge 80 ]; then
           echo "✅ Security gate passed: $SECURITY_SCORE/100"
@@ -191,13 +191,13 @@ jobs:
           echo "❌ Security gate failed: $SECURITY_SCORE/100 (required >= 80)"
           ALL_PASSED=false
         fi
-        
+
         # Force promotion bypass
         if [ "$FORCE_PROMOTION" == "true" ]; then
           echo "⚠️ Force promotion enabled - bypassing quality gates"
           ALL_PASSED=true
         fi
-        
+
         echo "all-passed=$ALL_PASSED" >> $GITHUB_OUTPUT
         echo "::endgroup::"
 
@@ -217,8 +217,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: [pre-flight, quality-gates]
     if: |
-      needs.pre-flight.outputs.should-promote == 'true' && 
-      (needs.quality-gates.outputs.all-checks-passed == 'true' || 
+      needs.pre-flight.outputs.should-promote == 'true' &&
+      (needs.quality-gates.outputs.all-checks-passed == 'true' ||
        github.event.inputs.force_promotion == 'true')
     outputs:
       image-digest: ${{ steps.build.outputs.digest }}
@@ -292,7 +292,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [pre-flight, build]
     if: |
-      needs.pre-flight.outputs.should-promote == 'true' && 
+      needs.pre-flight.outputs.should-promote == 'true' &&
       needs.pre-flight.outputs.target-env == 'staging'
     environment:
       name: staging
@@ -308,7 +308,7 @@ jobs:
         echo "Image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ needs.build.outputs.image-digest }}"
         echo "Version: ${{ needs.build.outputs.version }}"
         echo "Commit: ${{ github.sha }}"
-        
+
         # Simulate deployment (replace with actual deployment logic)
         echo "✅ Staging deployment completed successfully"
         echo "::endgroup::"
@@ -317,7 +317,7 @@ jobs:
       run: |
         echo "::group::Staging Health Check"
         echo "🔍 Performing health checks on staging deployment"
-        
+
         # Simulate health check (replace with actual health check)
         sleep 30
         echo "✅ Staging health checks passed"
@@ -327,7 +327,7 @@ jobs:
       run: |
         echo "::group::Running Staging Smoke Tests"
         echo "🧪 Running smoke tests on staging"
-        
+
         # Simulate smoke tests (replace with actual tests)
         sleep 20
         echo "✅ Staging smoke tests passed"
@@ -337,12 +337,12 @@ jobs:
       run: |
         echo "::group::Triggering monitoring for staging"
         echo "📊 Triggering monitoring workflow for staging environment"
-        
+
         # Trigger monitoring workflow
         gh workflow run monitoring.yml \
           --field environment=staging \
           --field deployment_url=https://staging.tlsai-agent.example.com
-        
+
         echo "✅ Monitoring triggered for staging"
         echo "::endgroup::"
 
@@ -352,7 +352,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [pre-flight, build, deploy-staging]
     if: |
-      needs.pre-flight.outputs.should-promote == 'true' && 
+      needs.pre-flight.outputs.should-promote == 'true' &&
       needs.pre-flight.outputs.target-env == 'production' &&
       needs.deploy-staging.result == 'success'
     environment:
@@ -376,7 +376,7 @@ jobs:
         echo "Image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ needs.build.outputs.image-digest }}"
         echo "Version: ${{ needs.build.outputs.version }}"
         echo "Commit: ${{ github.sha }}"
-        
+
         # Simulate deployment (replace with actual deployment logic)
         echo "✅ Production deployment completed successfully"
         echo "::endgroup::"
@@ -385,7 +385,7 @@ jobs:
       run: |
         echo "::group::Production Health Check"
         echo "🔍 Performing health checks on production deployment"
-        
+
         # Simulate health check (replace with actual health check)
         sleep 60
         echo "✅ Production health checks passed"
@@ -395,7 +395,7 @@ jobs:
       run: |
         echo "::group::Running Production Smoke Tests"
         echo "🧪 Running smoke tests on production"
-        
+
         # Simulate smoke tests (replace with actual tests)
         sleep 30
         echo "✅ Production smoke tests passed"
@@ -405,12 +405,12 @@ jobs:
       run: |
         echo "::group::Triggering monitoring for production"
         echo "📊 Triggering monitoring workflow for production environment"
-        
+
         # Trigger monitoring workflow
         gh workflow run monitoring.yml \
           --field environment=production \
           --field deployment_url=https://tlsai-agent.example.com
-        
+
         echo "✅ Monitoring triggered for production"
         echo "::endgroup::"
 
@@ -419,7 +419,7 @@ jobs:
     name: Rollback Deployment
     runs-on: ubuntu-latest
     if: |
-      github.event_name == 'workflow_dispatch' && 
+      github.event_name == 'workflow_dispatch' &&
       github.event.inputs.rollback == 'true'
     needs: [pre-flight]
     environment:
@@ -429,7 +429,7 @@ jobs:
       run: |
         echo "::group::Rolling Back Production"
         echo "🔄 Rolling back production deployment"
-        
+
         # Simulate rollback (replace with actual rollback logic)
         echo "✅ Production rollback completed successfully"
         echo "::endgroup::"
@@ -438,7 +438,7 @@ jobs:
       run: |
         echo "::group::Rolling Back Staging"
         echo "🔄 Rolling back staging deployment"
-        
+
         # Simulate rollback (replace with actual rollback logic)
         echo "✅ Staging rollback completed successfully"
         echo "::endgroup::"
@@ -489,7 +489,7 @@ jobs:
     - name: Update Deployment Status
       run: |
         echo "::group::Updating Deployment Status"
-        
+
         # Create deployment status (for PR integration)
         if [ "${{ github.event_name }}" == "pull_request" ]; then
           # Update PR status with deployment result
@@ -499,5 +499,5 @@ jobs:
             echo "❌ Deployment failed - updating PR status"
           fi
         fi
-        
+
         echo "::endgroup::"

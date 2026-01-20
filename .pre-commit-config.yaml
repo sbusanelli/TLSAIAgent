@@ -85,7 +85,7 @@ repos:
         types: [text]
         stages: [pre-commit]
 
-  # Detect secrets (temporarily disabled due to baseline version incompatibility)
+  # Detect secrets (temporarily disabled due to version incompatibility)
   # - repo: https://github.com/Yelp/detect-secrets
   #   rev: v1.4.0
   #   hooks:
