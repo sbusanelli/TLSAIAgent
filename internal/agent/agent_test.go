@@ -201,7 +201,7 @@ func TestAgentConcurrentAccess(t *testing.T) {
 	go func() {
 		Run(store, state, agentStopChan)
 		close(agentDone)
-	}
+	}()
 
 	// Give agent time to start
 	time.Sleep(100 * time.Millisecond)

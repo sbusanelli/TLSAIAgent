@@ -551,3 +551,4 @@ func BenchmarkGetCertificate(b *testing.B) {
 		store.GetCertificate(&tls.ClientHelloInfo{})
 	}
 }
+}
