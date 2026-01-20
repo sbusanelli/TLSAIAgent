@@ -233,7 +233,7 @@ func BenchmarkConcurrentAccess(b *testing.B) {
 		b.Fatalf("Failed to load certificates: %v", err)
 	}
 
-	state := agent.NewState(cert)
+	_ = agent.NewState(cert)
 
 	b.ResetTimer()
 
