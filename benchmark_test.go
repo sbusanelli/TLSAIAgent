@@ -546,7 +546,7 @@ func BenchmarkFeatureFlags(b *testing.B) {
 
 	// Test feature validation
 	b.Run("ValidateFeatures", func(b *testing.B) {
-		f := features.DefaultFeatures()
+		_ = features.DefaultFeatures()
 		for i := 0; i < b.N; i++ {
 			// f.Validate()
 		}
