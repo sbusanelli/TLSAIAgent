@@ -108,7 +108,7 @@ func TestAgentFileWatcher(t *testing.T) {
 	go func() {
 		Run(store, state, agentStopChan)
 		close(agentDone)
-	}
+	}()
 
 	// Give agent time to start
 	time.Sleep(100 * time.Millisecond)
@@ -153,7 +153,7 @@ func TestAgentSignalHandling(t *testing.T) {
 	go func() {
 		Run(store, state, agentStopChan)
 		close(agentDone)
-	}
+	}()
 
 	// Give agent time to start
 	time.Sleep(100 * time.Millisecond)
@@ -255,7 +255,7 @@ func TestAgentMemoryLeak(t *testing.T) {
 	go func() {
 		Run(store, state, agentStopChan)
 		close(agentDone)
-	}
+	}()
 
 	// Give agent time to start
 	time.Sleep(100 * time.Millisecond)
@@ -272,7 +272,7 @@ func TestAgentMemoryLeak(t *testing.T) {
 				time.Sleep(10 * time.Millisecond)
 			}
 		}
-	}
+	}()
 
 	// Run for a short duration
 	time.Sleep(500 * time.Millisecond)
@@ -311,7 +311,7 @@ func TestAgentErrorHandling(t *testing.T) {
 	go func() {
 		Run(store, state, agentStopChan)
 		close(agentDone)
-	}
+	}()
 
 	// Give agent time to start
 	time.Sleep(100 * time.Millisecond)
@@ -355,7 +355,7 @@ func TestAgentResourceCleanup(t *testing.T) {
 	go func() {
 		Run(store, state, agentStopChan)
 		close(agentDone)
-	}
+	}()
 
 	// Give agent time to start
 	time.Sleep(100 * time.Millisecond)
@@ -432,7 +432,7 @@ func TestAgentPerformance(t *testing.T) {
 	go func() {
 		Run(store, state, agentStopChan)
 		close(agentDone)
-	}
+	}()
 
 	// Give agent time to start
 	time.Sleep(100 * time.Millisecond)
@@ -487,7 +487,7 @@ func TestAgentIntegration(t *testing.T) {
 	go func() {
 		Run(store, state, agentStopChan)
 		close(agentDone)
-	}
+	}()
 
 	// Give agent time to start
 	time.Sleep(100 * time.Millisecond)
@@ -517,7 +517,7 @@ func TestAgentIntegration(t *testing.T) {
 			t.Logf("Server error: %v", err)
 		}
 		close(serverStopped)
-	}
+	}()
 
 	// Wait for server to start
 	<-serverStarted
