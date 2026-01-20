@@ -1,9 +1,9 @@
 name: Environment Promotion Pipeline
 
 on:
-  push:
-    branches: [ main, develop ]
-    tags: [ 'v*' ]
+  # push:
+  #   branches: [ main, develop ]
+  #   tags: [ 'v*' ]
   pull_request:
     branches: [ main ]
   workflow_dispatch:
