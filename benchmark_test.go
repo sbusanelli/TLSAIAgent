@@ -508,9 +508,9 @@ func BenchmarkMemoryUsage(b *testing.B) {
 	for i := 0; i < 1000; i++ {
 		for j := 0; j < 100; j++ {
 			stores[j].GetCertificate(&tls.ClientHelloInfo{})
-// 			states[j].IncrementCertificateCount()
-			states[j].GetCertificateCount()
-			states[j].IsRunning()
+// // 			states[j].IncrementCertificateCount()
+// 			states[j].GetCertificateCount()
+// 			states[j].IsRunning()
 		}
 	}
 
