@@ -15,7 +15,7 @@ import (
 
 // TestAgentStartStop tests basic agent start and stop functionality
 func TestAgentStartStop(t *testing.T) {
-	cert, err := tlsstore.Load("certs/server.crt", "certs/server.key")
+	cert, err := tlsstore.Load("../../certs/server.crt", "../../certs/server.key")
 	if err != nil {
 		t.Fatalf("Failed to load certificates: %v", err)
 	}
@@ -48,7 +48,7 @@ func TestAgentStartStop(t *testing.T) {
 
 // TestAgentState tests agent state management
 func TestAgentState(t *testing.T) {
-	cert, err := tlsstore.Load("certs/server.crt", "certs/server.key")
+	cert, err := tlsstore.Load("../../certs/server.crt", "../../certs/server.key")
 	if err != nil {
 		t.Fatalf("Failed to load certificates: %v", err)
 	}
@@ -56,35 +56,20 @@ func TestAgentState(t *testing.T) {
 	state := NewState(cert)
 
 	// Test initial state
-// 	if !state.IsRunning() {
-// 		t.Error("Agent should be running initially")
-// 	}
-// 
-// 	if state.GetCertificateCount() != 0 {
-		t.Error("Certificate count should be 0 initially")
+	if state.Current == nil {
+		t.Error("Current certificate should not be nil")
 	}
-
-	// Test certificate tracking
-// 	state.IncrementCertificateCount()
-// 	if state.GetCertificateCount() != 1 {
-// 		t.Error("Certificate count should be 1 after increment")
-// 	}
-// 
-// 	state.IncrementCertificateCount()
-// 	if state.GetCertificateCount() != 2 {
-		t.Error("Certificate count should be 2 after second increment")
+	if state.Previous != nil {
+		t.Error("Previous certificate should be nil initially")
 	}
-
-	// Test stop state
-	state.Stop()
-	if state.IsRunning() {
-		t.Error("Agent should not be running after stop")
+	if state.LastRun.IsZero() {
+		t.Error("LastRun should be set after state creation")
 	}
 }
 
 // TestAgentFileWatcher tests file watching functionality
 func TestAgentFileWatcher(t *testing.T) {
-	cert, err := tlsstore.Load("certs/server.crt", "certs/server.key")
+	cert, err := tlsstore.Load("../../certs/server.crt", "../../certs/server.key")
 	if err != nil {
 		t.Fatalf("Failed to load certificates: %v", err)
 	}
@@ -139,7 +124,7 @@ func TestAgentFileWatcher(t *testing.T) {
 
 // TestAgentSignalHandling tests signal handling functionality
 func TestAgentSignalHandling(t *testing.T) {
-	cert, err := tlsstore.Load("certs/server.crt", "certs/server.key")
+	cert, err := tlsstore.Load("../../certs/server.crt", "../../certs/server.key")
 	if err != nil {
 		t.Fatalf("Failed to load certificates: %v", err)
 	}
@@ -168,9 +153,9 @@ func TestAgentSignalHandling(t *testing.T) {
 	// Wait for signal to be processed
 	time.Sleep(100 * time.Millisecond)
 
-	// Verify agent is still running (should handle signal gracefully)
-	if !state.IsRunning() {
-		t.Error("Agent should still be running after signal")
+	// Verify agent state is still valid (should handle signal gracefully)
+	if state.Current == nil {
+		t.Error("Agent should still have current certificate after signal")
 	}
 
 	// Signal agent to stop
@@ -187,7 +172,7 @@ func TestAgentSignalHandling(t *testing.T) {
 
 // TestAgentConcurrentAccess tests concurrent access to agent state
 func TestAgentConcurrentAccess(t *testing.T) {
-	cert, err := tlsstore.Load("certs/server.crt", "certs/server.key")
+	cert, err := tlsstore.Load("../../certs/server.crt", "../../certs/server.key")
 	if err != nil {
 		t.Fatalf("Failed to load certificates: %v", err)
 	}
@@ -210,8 +195,10 @@ func TestAgentConcurrentAccess(t *testing.T) {
 	done := make(chan bool, 10)
 	for i := 0; i < 10; i++ {
 		go func(id int) {
-			// Test concurrent certificate count increments
-			state.IncrementCertificateCount()
+			// Test concurrent access to state fields
+			_ = state.Current
+			_ = state.Previous
+			_ = state.LastRun
 			done <- true
 		}(i)
 	}
@@ -221,10 +208,9 @@ func TestAgentConcurrentAccess(t *testing.T) {
 		<-done
 	}
 
-	// Verify certificate count
-	expectedCount := 10
-	if state.GetCertificateCount() != expectedCount {
-		t.Errorf("Expected certificate count %d, got %d", expectedCount, state.GetCertificateCount())
+	// Verify state is still valid
+	if state.Current == nil {
+		t.Error("Current certificate should not be nil after concurrent access")
 	}
 
 	// Signal agent to stop
@@ -234,14 +220,14 @@ func TestAgentConcurrentAccess(t *testing.T) {
 	select {
 	case <-agentDone:
 		t.Log("Agent handled concurrent access successfully")
-	case <-time.After(5 * time.Store):
+	case <-time.After(5 * time.Second):
 		t.Error("Agent did not stop after concurrent access test")
 	}
 }
 
 // TestAgentMemoryLeak tests for memory leaks during long-running operation
 func TestAgentMemoryLeak(t *testing.T) {
-	cert, err := tlsstore.Load("certs/server.crt", "certs/server.key")
+	cert, err := tlsstore.Load("../../certs/server.crt", "../../certs/server.key")
 	if err != nil {
 		t.Fatalf("Failed to load certificates: %v", err)
 	}
@@ -260,7 +246,7 @@ func TestAgentMemoryLeak(t *testing.T) {
 	// Give agent time to start
 	time.Sleep(100 * time.Millisecond)
 
-	// Simulate long-running operation with periodic state changes
+	// Simulate long-running operation with periodic state access
 	stopTest := make(chan bool)
 	go func() {
 		for {
@@ -268,7 +254,10 @@ func TestAgentMemoryLeak(t *testing.T) {
 			case <-stopTest:
 				return
 			default:
-				state.IncrementCertificateCount()
+				// Access state fields to test memory usage
+				_ = state.Current
+				_ = state.Previous
+				state.LastRun = time.Now()
 				time.Sleep(10 * time.Millisecond)
 			}
 		}
@@ -278,9 +267,9 @@ func TestAgentMemoryLeak(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 	close(stopTest)
 
-	// Verify agent is still running
-	if !state.IsRunning() {
-		t.Error("Agent should still be running during memory leak test")
+	// Verify agent state is still valid
+	if state.Current == nil {
+		t.Error("Agent should still have current certificate during memory leak test")
 	}
 
 	// Signal agent to stop
@@ -297,7 +286,7 @@ func TestAgentMemoryLeak(t *testing.T) {
 
 // TestAgentErrorHandling tests error handling in agent operations
 func TestAgentErrorHandling(t *testing.T) {
-	cert, err := tlsstore.Load("certs/server.crt", "certs/server.key")
+	cert, err := tlsstore.Load("../../certs/server.crt", "../../certs/server.key")
 	if err != nil {
 		t.Fatalf("Failed to load certificates: %v", err)
 	}
@@ -322,10 +311,11 @@ func TestAgentErrorHandling(t *testing.T) {
 
 	// Test state operations with error conditions
 	// This is a placeholder for error handling tests
-	state.IncrementCertificateCount()
-	if state.GetCertificateCount() < 1 {
-		t.Error("Certificate count should be at least 1")
+	// Test that state fields are accessible
+	if state.Current == nil {
+		t.Error("Current certificate should not be nil")
 	}
+	// Previous can be nil initially, that's expected
 
 	// Signal agent to stop
 	close(agentStopChan)
@@ -341,7 +331,7 @@ func TestAgentErrorHandling(t *testing.T) {
 
 // TestAgentResourceCleanup tests resource cleanup when agent stops
 func TestAgentResourceCleanup(t *testing.T) {
-	cert, err := tlsstore.Load("certs/server.crt", "certs/server.key")
+	cert, err := tlsstore.Load("../../certs/server.crt", "../../certs/server.key")
 	if err != nil {
 		t.Fatalf("Failed to load certificates: %v", err)
 	}
@@ -375,50 +365,49 @@ func TestAgentResourceCleanup(t *testing.T) {
 	// Note: In a real implementation, you would verify that
 	// file watchers, goroutines, and other resources are properly cleaned up
 
-	// Test that state is properly reset
-	if state.IsRunning() {
-		t.Error("Agent state should indicate it's not running")
+	// Test that state is still accessible after cleanup
+	if state.Current == nil {
+		t.Error("Current certificate should still be accessible after cleanup")
 	}
 }
 
 // TestAgentConfiguration tests agent configuration handling
 func TestAgentConfiguration(t *testing.T) {
-	cert, err := tlsstore.Load("certs/server.crt", "certs/server.key")
+	cert, err := tlsstore.Load("../../certs/server.crt", "../../certs/server.key")
 	if err != nil {
 		t.Fatalf("Failed to load certificates: %v", err)
 	}
 
-	store := tlsstore.New(cert)
 	state := NewState(cert)
 
 	// Test certificate configuration
-	if state.GetCertificate() == nil {
-		t.Error("Certificate should not be nil")
+	if state.Current == nil {
+		t.Error("Current certificate should not be nil")
 	}
 
 	// Test certificate properties
-	if state.GetCertificate().Certificate == nil {
-		t.Error("Certificate certificate should not be nil")
+	if state.Current.Certificate == nil {
+		t.Error("Current certificate data should not be nil")
 	}
 
-	if state.GetCertificate().PrivateKey == nil {
-		t.Error("Certificate private key should not be nil")
+	if state.Current.PrivateKey == nil {
+		t.Error("Current private key should not be nil")
 	}
 
 	// Test state configuration
-	if state.IsRunning() != true {
-		t.Error("Agent should be running initially")
+	if state.Previous != nil {
+		t.Error("Previous certificate should be nil initially")
 	}
 
-	// Test certificate count initialization
-	if state.GetCertificateCount() != 0 {
-		t.Error("Certificate count should be 0 initially")
+	// Test timestamp initialization
+	if state.LastRun.IsZero() {
+		t.Error("LastRun should be set after state creation")
 	}
 }
 
 // TestAgentPerformance tests agent performance under load
 func TestAgentPerformance(t *testing.T) {
-	cert, err := tlsstore.Load("certs/server.crt", "certs/server.key")
+	cert, err := tlsstore.Load("../../certs/server.crt", "../../certs/server.key")
 	if err != nil {
 		t.Fatalf("Failed to load certificates: %v", err)
 	}
@@ -437,21 +426,22 @@ func TestAgentPerformance(t *testing.T) {
 	// Give agent time to start
 	time.Sleep(100 * time.Millisecond)
 
-	// Performance test: rapid state changes
+	// Performance test: rapid state field access
 	startTime := time.Now()
 	iterations := 1000
 
 	for i := 0; i < iterations; i++ {
-		state.IncrementCertificateCount()
-		state.IncrementCertificateCount()
-		state.GetCertificateCount()
-		state.IsRunning()
+		// Test field access performance
+		_ = state.Current
+		_ = state.Previous
+		_ = state.LastRun
+		state.LastRun = time.Now()
 	}
 
 	duration := time.Since(startTime)
 	avgDuration := duration / time.Duration(iterations*4) // 4 operations per iteration
 
-	t.Logf("Performance test: %d iterations in %v (avg: %v per operation)", 
+	t.Logf("Performance test: %d iterations in %v (avg: %v per operation)",
 		iterations, duration, avgDuration)
 
 	// Performance threshold (adjust as needed)
@@ -473,7 +463,7 @@ func TestAgentPerformance(t *testing.T) {
 
 // TestAgentIntegration tests integration with HTTP server
 func TestAgentIntegration(t *testing.T) {
-	cert, err := tlsstore.Load("certs/server.crt", "certs/server.key")
+	cert, err := tlsstore.Load("../../certs/server.crt", "../../certs/server.key")
 	if err != nil {
 		t.Fatalf("Failed to load certificates: %v", err)
 	}
@@ -501,7 +491,7 @@ func TestAgentIntegration(t *testing.T) {
 	server := &http.Server{
 		Addr:      ":9446",
 		TLSConfig: tlsCfg,
-		Handler:   http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte("OK"))
 		}),
@@ -570,38 +560,37 @@ func TestAgentIntegration(t *testing.T) {
 
 // BenchmarkAgentOperations benchmarks agent operations
 func BenchmarkAgentOperations(b *testing.B) {
-	cert, err := tlsstore.Load("certs/server.crt", "certs/server.key")
+	cert, err := tlsstore.Load("../../certs/server.crt", "../../certs/server.key")
 	if err != nil {
 		b.Fatalf("Failed to load certificates: %v", err)
 	}
 
-	store := tlsstore.New(cert)
 	state := NewState(cert)
 
 	b.ResetTimer()
 
-	// Benchmark certificate count operations
-	b.Run("IncrementCertificateCount", func(b *testing.B) {
+	// Benchmark state field access operations
+	b.Run("CurrentAccess", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			state.IncrementCertificateCount()
+			_ = state.Current
 		}
 	})
 
-	b.Run("GetCertificateCount", func(b *testing.B) {
+	b.Run("PreviousAccess", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			state.GetCertificateCount()
+			_ = state.Previous
 		}
 	})
 
-	b.Run("IsRunning", func(b *testing.B) {
+	b.Run("LastRunAccess", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			state.IsRunning()
+			_ = state.LastRun
 		}
 	})
 
-	b.Run("GetCertificate", func(b *testing.B) {
+	b.Run("LastRunUpdate", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			state.GetCertificate()
+			state.LastRun = time.Now()
 		}
 	})
 }

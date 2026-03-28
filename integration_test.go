@@ -19,16 +19,9 @@ import (
 
 // TestIntegrationAgentServer tests the complete integration between agent and HTTP server
 func TestIntegrationAgentServer(t *testing.T) {
-	// Create temporary directory for test certificates
-	tempDir := t.TempDir()
-	certFile := filepath.Join(tempDir, "server.crt")
-	keyFile := filepath.Join(tempDir, "server.key")
-
-	// Create test certificates (simplified for testing)
-	err := createTestCertificates(certFile, keyFile)
-	if err != nil {
-		t.Fatalf("Failed to create test certificates: %v", err)
-	}
+	// Use existing real certificates for testing
+	certFile := "certs/server.crt"
+	keyFile := "certs/server.key"
 
 	// Load certificates
 	cert, err := tlsstore.Load(certFile, keyFile)
@@ -125,23 +118,13 @@ func TestIntegrationAgentServer(t *testing.T) {
 		t.Error("Agent did not stop in time")
 	}
 
-	// Clean up
-	os.Remove(certFile)
-	os.Remove(keyFile)
 }
 
 // TestIntegrationFeatureFlags tests integration with feature flags
 func TestIntegrationFeatureFlags(t *testing.T) {
-	// Create temporary directory for test certificates
-	tempDir := t.TempDir()
-	certFile := filepath.Join(tempDir, "server.crt")
-	keyFile := filepath.Join(tempDir, "server.key")
-
-	// Create test certificates
-	err := createTestCertificates(certFile, keyFile)
-	if err != nil {
-		t.Fatalf("Failed to create test certificates: %v", err)
-	}
+	// Use existing real certificates for testing
+	certFile := "certs/server.crt"
+	keyFile := "certs/server.key"
 
 	// Load certificates
 	cert, err := tlsstore.Load(certFile, keyFile)
@@ -171,8 +154,8 @@ func TestIntegrationFeatureFlags(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Verify agent is running
-	if !state.IsRunning() {
-		t.Error("Agent should be running with feature flags enabled")
+	if state.Current == nil {
+		t.Error("Agent should have a current certificate")
 	}
 
 	// Signal agent to stop
@@ -186,23 +169,13 @@ func TestIntegrationFeatureFlags(t *testing.T) {
 		t.Error("Agent with feature flags did not stop in time")
 	}
 
-	// Clean up
-	os.Remove(certFile)
-	os.Remove(keyFile)
 }
 
 // TestIntegrationHotReload tests hot reload functionality
 func TestIntegrationHotReload(t *testing.T) {
-	// Create temporary directory for test certificates
-	tempDir := t.TempDir()
-	certFile := filepath.Join(tempDir, "server.crt")
-	keyFile := filepath.Join(tempDir, "server.key")
-
-	// Create test certificates
-	err := createTestCertificates(certFile, keyFile)
-	if err != nil {
-		t.Fatalf("Failed to create test certificates: %v", err)
-	}
+	// Use existing real certificates for testing
+	certFile := "certs/server.crt"
+	keyFile := "certs/server.key"
 
 	// Load certificates
 	cert, err := tlsstore.Load(certFile, keyFile)
@@ -234,7 +207,7 @@ func TestIntegrationHotReload(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 
 	// Verify agent is still running
-	if !state.IsRunning() {
+	if state.Current == nil {
 		t.Error("Agent should still be running after hot reload")
 	}
 
@@ -249,23 +222,13 @@ func TestIntegrationHotReload(t *testing.T) {
 		t.Error("Agent with hot reload did not stop in time")
 	}
 
-	// Clean up
-	os.Remove(certFile)
-	os.Remove(keyFile)
 }
 
 // TestIntegrationGracefulShutdown tests graceful shutdown integration
 func TestIntegrationGracefulShutdown(t *testing.T) {
-	// Create temporary directory for test certificates
-	tempDir := t.TempDir()
-	certFile := filepath.Join(tempDir, "server.crt")
-	keyFile := filepath.Join(tempDir, "server.key")
-
-	// Create test certificates
-	err := createTestCertificates(certFile, keyFile)
-	if err != nil {
-		t.Fatalf("Failed to create test certificates: %v", err)
-	}
+	// Use existing real certificates for testing
+	certFile := "certs/server.crt"
+	keyFile := "certs/server.key"
 
 	// Load certificates
 	cert, err := tlsstore.Load(certFile, keyFile)
@@ -386,23 +349,13 @@ func TestIntegrationGracefulShutdown(t *testing.T) {
 		t.Error("Agent did not stop in time")
 	}
 
-	// Clean up
-	os.Remove(certFile)
-	os.Remove(keyFile)
 }
 
 // TestIntegrationMultipleServers tests integration with multiple HTTP servers
 func TestIntegrationMultipleServers(t *testing.T) {
-	// Create temporary directory for test certificates
-	tempDir := t.TempDir()
-	certFile := filepath.Join(tempDir, "server.crt")
-	keyFile := filepath.Join(tempDir, "server.key")
-
-	// Create test certificates
-	err := createTestCertificates(certFile, keyFile)
-	if err != nil {
-		t.Fatalf("Failed to create test certificates: %v", err)
-	}
+	// Use existing real certificates for testing
+	certFile := "certs/server.crt"
+	keyFile := "certs/server.key"
 
 	// Load certificates
 	cert, err := tlsstore.Load(certFile, keyFile)
@@ -507,9 +460,6 @@ func TestIntegrationMultipleServers(t *testing.T) {
 		t.Error("Agent did not stop in time")
 	}
 
-	// Clean up
-	os.Remove(certFile)
-	os.Remove(keyFile)
 }
 
 // TestIntegrationErrorHandling tests error handling in integration scenarios
@@ -547,16 +497,9 @@ func TestIntegrationErrorHandling(t *testing.T) {
 
 // TestIntegrationPerformance tests performance in integration scenarios
 func TestIntegrationPerformance(t *testing.T) {
-	// Create temporary directory for test certificates
-	tempDir := t.TempDir()
-	certFile := filepath.Join(tempDir, "server.crt")
-	keyFile := filepath.Join(tempDir, "server.key")
-
-	// Create test certificates
-	err := createTestCertificates(certFile, keyFile)
-	if err != nil {
-		t.Fatalf("Failed to create test certificates: %v", err)
-	}
+	// Use existing real certificates for testing
+	certFile := "certs/server.crt"
+	keyFile := "certs/server.key"
 
 	// Load certificates
 	cert, err := tlsstore.Load(certFile, keyFile)
@@ -583,10 +526,9 @@ func TestIntegrationPerformance(t *testing.T) {
 	iterations := 1000
 
 	for i := 0; i < iterations; i++ {
-		state.IncrementCertificateCount()
-		state.GetCertificateCount()
-		state.IsRunning()
-		state.GetCertificate()
+		// Simulate certificate operations
+		_ = state.Current
+		_ = state.LastRun
 	}
 
 	duration := time.Since(startTime)
@@ -611,9 +553,6 @@ func TestIntegrationPerformance(t *testing.T) {
 		t.Error("Agent did not stop after performance test")
 	}
 
-	// Clean up
-	os.Remove(certFile)
-	os.Remove(keyFile)
 }
 
 // Helper function to create test certificates

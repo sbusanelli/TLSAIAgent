@@ -5,8 +5,9 @@ import (
 	"log"
 	"time"
 
-	"github.com/fsnotify/fsnotify"
 	"tls-agent/internal/tlsstore"
+
+	"github.com/fsnotify/fsnotify"
 )
 
 type State struct {
@@ -16,7 +17,10 @@ type State struct {
 }
 
 func NewState(cert *tls.Certificate) *State {
-	return &State{Current: cert}
+	return &State{
+		Current: cert,
+		LastRun: time.Now(),
+	}
 }
 
 // Run starts the certificate watcher agent.
