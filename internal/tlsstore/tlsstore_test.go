@@ -7,6 +7,28 @@ import (
 	"testing"
 )
 
+// TestIsValid tests certificate validity checking
+func TestIsValid(t *testing.T) {
+	// Load a valid certificate
+	cert, err := Load("../../certs/server.crt", "../../certs/server.key")
+	if err != nil {
+		t.Fatalf("Failed to load certificates: %v", err)
+	}
+
+	store := New(cert)
+
+	// Test valid certificate
+	if !store.IsValid() {
+		t.Error("Valid certificate should return true")
+	}
+
+	// Test with nil certificate
+	storeNil := New(nil)
+	if storeNil.IsValid() {
+		t.Error("Nil certificate should return false")
+	}
+}
+
 // TestLoad tests certificate loading functionality
 func TestLoad(t *testing.T) {
 	// Test loading valid certificates
