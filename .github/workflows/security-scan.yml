@@ -69,7 +69,7 @@ jobs:
         echo "::endgroup::"
 
     - name: Upload Gosec Reports
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: gosec-reports
@@ -91,7 +91,7 @@ jobs:
         echo "::endgroup::"
 
     - name: Upload Semgrep Reports
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: semgrep-reports
@@ -149,7 +149,7 @@ jobs:
         echo "::endgroup::"
 
     - name: Upload Vulnerability Reports
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: vulnerability-reports
@@ -172,7 +172,7 @@ jobs:
         echo "::endgroup::"
 
     - name: Upload Snyk Reports
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always() && secrets.SNYK_TOKEN != ''
       with:
         name: snyk-reports
@@ -244,7 +244,7 @@ jobs:
         echo "::endgroup::"
 
     - name: Upload Trivy Reports
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: trivy-reports
@@ -264,7 +264,7 @@ jobs:
         echo "::endgroup::"
 
     - name: Upload Grype Reports
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: grype-reports
@@ -292,7 +292,7 @@ jobs:
         echo "::endgroup::"
 
     - name: Upload Checkov Reports
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: checkov-reports
@@ -324,7 +324,7 @@ jobs:
         echo "::endgroup::"
 
     - name: Upload Gitleaks Reports
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: gitleaks-reports
@@ -344,7 +344,7 @@ jobs:
         echo "::endgroup::"
 
     - name: Upload TruffleHog Reports
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: trufflehog-reports

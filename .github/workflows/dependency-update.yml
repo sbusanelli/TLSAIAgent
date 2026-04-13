@@ -89,7 +89,7 @@ jobs:
         echo "::endgroup::"
 
     - name: Upload Analysis Reports
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: dependency-analysis
@@ -158,7 +158,7 @@ jobs:
         echo "::endgroup::"
 
     - name: Upload Security Reports
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: security-reports
@@ -370,7 +370,7 @@ jobs:
         echo "::endgroup::"
 
     - name: Upload License Reports
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: license-reports
@@ -459,7 +459,7 @@ jobs:
         echo "::endgroup::"
 
     - name: Upload Dependency Report
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: dependency-report
         path: dependency-report.md
