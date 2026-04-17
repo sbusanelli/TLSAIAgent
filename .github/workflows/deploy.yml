@@ -47,7 +47,8 @@ jobs:
       id: security
       run: |
         echo "::group::Running Gosec Security Scanner"
-        go install github.com/securecodewarrior/gosec/v2/cmd/gosec@latest
+        # Install gosec using curl to avoid Git authentication issues
+        curl -sfL https://raw.githubusercontent.com/securecodewarrior/gosec/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v2.21.4
         gosec ./...
         echo "passed=true" >> $GITHUB_OUTPUT
         echo "::endgroup::"
