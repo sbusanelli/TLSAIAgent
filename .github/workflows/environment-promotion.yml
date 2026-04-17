@@ -132,8 +132,11 @@ jobs:
       run: |
         echo "::group::Running security scan"
 
-        # Install gosec
-        go install github.com/securego/gosec/v2/cmd/gosec@v2.18.2
+        # Install gosec using GitHub releases to avoid Git authentication issues
+        GOOS=$(go env GOOS)
+        GOARCH=$(go env GOARCH)
+        curl -sfL https://github.com/securecodewarrior/gosec/releases/download/v2.21.4/gosec_${GOOS}_${GOARCH}.tar.gz | tar -xz -C $(go env GOPATH)/bin gosec
+        chmod +x $(go env GOPATH)/bin/gosec
 
         # Run security scan
         gosec ./... -fmt json -out gosec-report.json || true
