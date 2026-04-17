@@ -157,6 +157,13 @@ jobs:
           vulncheck-report.txt
           vulncheck-report.json
 
+    - name: Setup Node.js
+      if: secrets.SNYK_TOKEN != ''
+      uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+        cache: 'npm'
+
     - name: Run Snyk Security Scan
       if: secrets.SNYK_TOKEN != ''
       run: |
