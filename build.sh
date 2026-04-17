@@ -2,7 +2,11 @@ cd /Users/sbusan01/go
 
 # Install gosec if missing
 if ! command -v gosec &> /dev/null; then
-  go install github.com/securego/gosec/v2/cmd/gosec@latest
+  # Install gosec using GitHub releases to avoid Git authentication issues
+  GOOS=$(go env GOOS)
+  GOARCH=$(go env GOARCH)
+  curl -sfL https://github.com/securecodewarrior/gosec/releases/download/v2.21.4/gosec_${GOOS}_${GOARCH}.tar.gz | tar -xz -C $(go env GOPATH)/bin gosec
+  chmod +x $(go env GOPATH)/bin/gosec
 fi
 
 # Run security scan
