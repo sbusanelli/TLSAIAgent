@@ -322,28 +322,47 @@ jobs:
     name: Notify Deployment Status
     runs-on: ubuntu-latest
     needs: [deploy-staging, deploy-production]
-    if: always() && (needs.deploy-staging.result == 'success' || needs.deploy-production.result == 'success')
+    if: always()
     steps:
-    - name: Notify Success
-      if: needs.deploy-staging.result == 'success' || needs.deploy-production.result == 'success'
+    - name: Deployment Status Notification
       run: |
-        echo "::group::Deployment Notification"
-        echo "📢 Deployment completed successfully!"
-        echo "Repository: ${{ github.repository }}"
-        echo "Branch: ${{ github.ref_name }}"
-        echo "Commit: ${{ github.sha }}"
-        echo "Actor: ${{ github.actor }}"
-        echo "::endgroup::"
+        echo "::group::Deployment Status Notification"
 
-    - name: Notify Failure
-      if: needs.deploy-staging.result == 'failure' || needs.deploy-production.result == 'failure'
-      run: |
-        echo "::group::Deployment Failure Notification"
-        echo "❌ Deployment failed!"
+        echo "� Deployment Results"
         echo "Repository: ${{ github.repository }}"
         echo "Branch: ${{ github.ref_name }}"
         echo "Commit: ${{ github.sha }}"
         echo "Actor: ${{ github.actor }}"
+        echo "Time: $(date -u)"
+        echo ""
+
+        echo "## Environment Status:"
+        echo "- Staging: ${{ needs.deploy-staging.result == 'success' && '✅ DEPLOYED' || needs.deploy-staging.result == 'failure' && '❌ FAILED' || needs.deploy-staging.result == 'skipped' && '⏭️ SKIPPED' || '⏸️ PENDING' }}"
+        echo "- Production: ${{ needs.deploy-production.result == 'success' && '✅ DEPLOYED' || needs.deploy-production.result == 'failure' && '❌ FAILED' || needs.deploy-production.result == 'skipped' && '⏭️ SKIPPED' || '⏸️ PENDING' }}"
+        echo ""
+
+        if [[ "${{ needs.deploy-staging.result }}" == "success" || "${{ needs.deploy-production.result }}" == "success" ]]; then
+          echo "🎉 Overall Status: DEPLOYMENT SUCCESSFUL"
+          echo ""
+          if [[ "${{ needs.deploy-staging.result }}" == "success" ]]; then
+            echo "✅ Staging environment deployed successfully"
+            echo "🔗 Staging URL: https://staging-tlsai-agent.example.com"
+          fi
+          if [[ "${{ needs.deploy-production.result }}" == "success" ]]; then
+            echo "✅ Production environment deployed successfully"
+            echo "🔗 Production URL: https://tlsai-agent.example.com"
+          fi
+        else
+          echo "🚨 Overall Status: DEPLOYMENT FAILED"
+          echo ""
+          echo "⚠️ Action Required: Please review deployment logs and fix issues before retrying."
+          echo ""
+          echo "📋 Next Steps:"
+          echo "1. Check the failed deployment job logs"
+          echo "2. Fix any configuration or infrastructure issues"
+          echo "3. Retry the deployment after resolving issues"
+        fi
+
         echo "::endgroup::"
 
   # Cleanup

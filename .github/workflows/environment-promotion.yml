@@ -453,40 +453,67 @@ jobs:
     needs: [pre-flight, quality-gates, build, deploy-staging, deploy-production]
     if: always()
     steps:
-    - name: Notify Success
-      if: |
-        (needs.deploy-staging.result == 'success' || needs.deploy-production.result == 'success') &&
-        needs.quality-gates.result == 'success'
+    - name: Environment Promotion Status
       run: |
-        echo "::group::Promotion Success Notification"
-        echo "🎉 Environment Promotion Successful!"
-        echo ""
-        echo "Repository: ${{ github.repository }}"
-        echo "Branch: ${{ needs.pre-flight.outputs.source-branch }}"
-        echo "Environment: ${{ needs.pre-flight.outputs.target-env }}"
-        echo "Version: ${{ needs.build.outputs.version }}"
-        echo "Commit: ${{ github.sha }}"
-        echo "Time: $(date -u)"
-        echo ""
-        echo "Quality Metrics:"
-        echo "- Test Coverage: ${{ needs.quality-gates.outputs.test-coverage }}%"
-        echo "- Security Score: ${{ needs.quality-gates.outputs.security-score }}/100"
-        echo "::endgroup::"
+        echo "::group::Environment Promotion Status"
 
-    - name: Notify Failure
-      if: |
-        (needs.deploy-staging.result == 'failure' || needs.deploy-production.result == 'failure') ||
-        needs.quality-gates.result == 'failure'
-      run: |
-        echo "::group::Promotion Failure Notification"
-        echo "❌ Environment Promotion Failed!"
-        echo ""
+        echo "🚀 Environment Promotion Results"
         echo "Repository: ${{ github.repository }}"
-        echo "Branch: ${{ needs.pre-flight.outputs.source-branch }}"
-        echo "Environment: ${{ needs.pre-flight.outputs.target-env }}"
-        echo "Version: ${{ needs.build.outputs.version }}"
+        echo "Branch: ${{ github.ref_name }}"
         echo "Commit: ${{ github.sha }}"
         echo "Time: $(date -u)"
+        echo ""
+
+        echo "## Pipeline Status:"
+        echo "- Pre-flight Checks: ${{ needs.pre-flight.result == 'success' && '✅ PASSED' || needs.pre-flight.result == 'failure' && '❌ FAILED' || '⏭️ SKIPPED' }}"
+        echo "- Quality Gates: ${{ needs.quality-gates.result == 'success' && '✅ PASSED' || needs.quality-gates.result == 'failure' && '❌ FAILED' || '⏭️ SKIPPED' }}"
+        echo "- Build: ${{ needs.build.result == 'success' && '✅ PASSED' || needs.build.result == 'failure' && '❌ FAILED' || '⏭️ SKIPPED' }}"
+        echo "- Staging Deploy: ${{ needs.deploy-staging.result == 'success' && '✅ DEPLOYED' || needs.deploy-staging.result == 'failure' && '❌ FAILED' || '⏭️ SKIPPED' }}"
+        echo "- Production Deploy: ${{ needs.deploy-production.result == 'success' && '✅ DEPLOYED' || needs.deploy-production.result == 'failure' && '❌ FAILED' || '⏭️ SKIPPED' }}"
+        echo ""
+
+        echo "## Quality Metrics:"
+        echo "- Test Coverage: ${{ needs.quality-gates.outputs.test-coverage || 'N/A' }}%"
+        echo "- Security Score: ${{ needs.quality-gates.outputs.security-score || 'N/A' }}/100"
+        echo "- Build Version: ${{ needs.build.outputs.version || 'N/A' }}"
+        echo ""
+
+        if [[ "${{ needs.pre-flight.result }}" == "success" &&
+              "${{ needs.quality-gates.result }}" == "success" &&
+              ("${{ needs.deploy-staging.result }}" == "success" || "${{ needs.deploy-production.result }}" == "success" ) ]]; then
+          echo "🎉 Overall Status: ENVIRONMENT PROMOTION SUCCESSFUL"
+          echo ""
+          echo "✅ Promotion completed successfully!"
+          if [[ "${{ needs.deploy-staging.result }}" == "success" ]]; then
+            echo "🔗 Staging: https://staging-tlsai-agent.example.com"
+          fi
+          if [[ "${{ needs.deploy-production.result }}" == "success" ]]; then
+            echo "🔗 Production: https://tlsai-agent.example.com"
+          fi
+        else
+          echo "🚨 Overall Status: ENVIRONMENT PROMOTION FAILED"
+          echo ""
+          echo "⚠️ Action Required: Please review failed pipeline stages"
+          echo ""
+          echo "📋 Failed Stages:"
+          if [[ "${{ needs.pre-flight.result }}" == "failure" ]]; then
+            echo "❌ Pre-flight Checks - Review configuration and dependencies"
+          fi
+          if [[ "${{ needs.quality-gates.result }}" == "failure" ]]; then
+            echo "❌ Quality Gates - Improve test coverage or fix security issues"
+          fi
+          if [[ "${{ needs.build.result }}" == "failure" ]]; then
+            echo "❌ Build - Fix compilation or build errors"
+          fi
+          if [[ "${{ needs.deploy-staging.result }}" == "failure" ]]; then
+            echo "❌ Staging Deployment - Check staging environment configuration"
+          fi
+          if [[ "${{ needs.deploy-production.result }}" == "failure" ]]; then
+            echo "❌ Production Deployment - Check production environment configuration"
+          fi
+        fi
+
+        echo "::endgroup::"
         echo "::endgroup::"
 
     - name: Update Deployment Status

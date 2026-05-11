@@ -403,11 +403,28 @@ jobs:
         echo "Commit: ${{ github.sha }}"
         echo "Time: $(date -u)"
         echo ""
-        echo "Alert Details:"
-        echo "- Health Status: ${{ needs.health-monitoring.outputs.health-status }}"
-        echo "- Performance Score: ${{ needs.performance-monitoring.outputs.performance-score }}"
-        echo "- Disk Usage: ${{ needs.resource-monitoring.outputs.disk-usage }}%"
-        echo "- Memory Usage: ${{ needs.resource-monitoring.outputs.memory-usage }}%"
+
+        echo "## Alert Summary:"
+        echo "❌ One or more monitoring checks have failed"
+        echo ""
+
+        echo "## Monitoring Results:"
+        echo "- Health Status: ${{ needs.health-monitoring.outputs.health-status || 'UNKNOWN' }}"
+        echo "- Performance Score: ${{ needs.performance-monitoring.outputs.performance-score || 'UNKNOWN' }}"
+        echo "- Disk Usage: ${{ needs.resource-monitoring.outputs.disk-usage || 'UNKNOWN' }}%"
+        echo "- Memory Usage: ${{ needs.resource-monitoring.outputs.memory-usage || 'UNKNOWN' }}%"
+        echo ""
+
+        echo "## Failed Jobs:"
+        echo "- Health Monitoring: ${{ needs.health-monitoring.result }}"
+        echo "- Performance Monitoring: ${{ needs.performance-monitoring.result }}"
+        echo "- Resource Monitoring: ${{ needs.resource-monitoring.result }}"
+        echo ""
+
+        echo "## Action Required:"
+        echo "⚠️ Please investigate the failed monitoring checks immediately"
+        echo "📋 Check the individual job logs for detailed error information"
+        echo "🔧 Address any performance, health, or resource issues found"
 
         echo "::endgroup::"
 

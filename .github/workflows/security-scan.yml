@@ -420,18 +420,33 @@ jobs:
       run: |
         echo "::group::Security Scan Notification"
 
+        echo "📊 Security Scan Results"
+        echo "Repository: ${{ github.repository }}"
+        echo "Branch: ${{ github.ref_name }}"
+        echo "Commit: ${{ github.sha }}"
+        echo "Time: $(date -u)"
+        echo ""
+
+        echo "## Scan Results:"
+        echo "- SAST Status: ${{ needs.sast.outputs.sast-passed == 'true' && '✅ PASSED' || '❌ FAILED' }}"
+        echo "- Dependency Scan Status: ${{ needs.dependency-scan.outputs.deps-passed == 'true' && '✅ PASSED' || '❌ FAILED' }}"
+        echo "- Container Scan Status: ${{ needs.container-scan.outputs.container-passed == 'true' && '✅ PASSED' || '❌ FAILED' }}"
+        echo ""
+
+        echo "## Vulnerability Counts:"
+        echo "- SAST Vulnerabilities: ${{ needs.sast.outputs.vulnerabilities-found }}"
+        echo "- Dependency Vulnerabilities: ${{ needs.dependency-scan.outputs.vulnerabilities-found }}"
+        echo "- Container Vulnerabilities: ${{ needs.container-scan.outputs.vulnerabilities-found }}"
+        echo ""
+
         if [[ "${{ needs.sast.outputs.sast-passed }}" == "true" &&
               "${{ needs.dependency-scan.outputs.deps-passed }}" == "true" &&
               "${{ needs.container-scan.outputs.container-passed }}" == "true" ]]; then
-          echo "🔒 Security scan completed successfully!"
-          echo "Repository: ${{ github.repository }}"
-          echo "Branch: ${{ github.ref_name }}"
-          echo "Commit: ${{ github.sha }}"
+          echo "🎉 Overall Status: SECURITY SCAN PASSED"
         else
-          echo "🚨 Security scan failed!"
-          echo "Repository: ${{ github.repository }}"
-          echo "Branch: ${{ github.ref_name }}"
-          echo "Commit: ${{ github.sha }}"
+          echo "🚨 Overall Status: SECURITY SCAN FAILED"
+          echo ""
+          echo "⚠️ Action Required: Please review and fix security issues before proceeding with deployment."
         fi
 
         echo "::endgroup::"
