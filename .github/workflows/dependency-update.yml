@@ -509,7 +509,9 @@ jobs:
         echo "- Updates Available: ${{ needs.dependency-analysis.outputs.update-available || 'UNKNOWN' }}"
         echo "- Update Success: ${{ needs.dependency-update.outputs.update-success || 'UNKNOWN' }}"
         echo "- Updated Packages: ${{ needs.dependency-update.outputs.updated-packages || 'NONE' }}"
-        echo "- Security Issues Found: ${{ needs.security-check.outputs.security-issues || 'NONE' }}"
+        echo "- Critical Vulnerabilities: ${{ needs.security-check.outputs.critical-vulns || '0' }}"
+        echo "- High Vulnerabilities: ${{ needs.security-check.outputs.high-vulns || '0' }}"
+        echo "- Medium Vulnerabilities: ${{ needs.security-check.outputs.medium-vulns || '0' }}"
         echo ""
 
         if [[ "${{ needs.dependency-update.outputs.update-success }}" == "true" ]]; then
@@ -536,7 +538,17 @@ jobs:
           echo "✅ Overall Status: NO DEPENDENCY UPDATES NEEDED"
           echo ""
           echo "🎉 All dependencies are up to date!"
-          echo "📊 No security vulnerabilities detected"
+          TOTAL_VULNS=$((${{ needs.security-check.outputs.critical-vulns || '0' }} + ${{ needs.security-check.outputs.high-vulns || '0' }} + ${{ needs.security-check.outputs.medium-vulns || '0' }}))
+          if [ "$TOTAL_VULNS" -gt 0 ]; then
+            echo "⚠️ Security vulnerabilities found:"
+            echo "  - Critical: ${{ needs.security-check.outputs.critical-vulns || '0' }}"
+            echo "  - High: ${{ needs.security-check.outputs.high-vulns || '0' }}"
+            echo "  - Medium: ${{ needs.security-check.outputs.medium-vulns || '0' }}"
+            echo ""
+            echo "� Action Required: Address security vulnerabilities even if dependencies are up to date"
+          else
+            echo "�📊 No security vulnerabilities detected"
+          fi
           echo ""
           echo "💡 Tip: Regular dependency updates help maintain security and compatibility"
         fi
